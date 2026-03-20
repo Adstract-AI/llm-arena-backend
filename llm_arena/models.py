@@ -72,7 +72,7 @@ class ArenaBattle(TimestampedModel):
     """Represent a single blind comparison request for one submitted prompt."""
 
     class BattleStatus(models.TextChoices):
-        PENDING = "pending", "Pending"
+        CREATED = "created", "Created"
         AWAITING_VOTE = "awaiting_vote", "Awaiting Vote"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
@@ -82,7 +82,7 @@ class ArenaBattle(TimestampedModel):
     status = models.CharField(
         max_length=16,
         choices=BattleStatus.choices,
-        default=BattleStatus.PENDING,
+        default=BattleStatus.CREATED,
     )
     error_message = models.TextField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)

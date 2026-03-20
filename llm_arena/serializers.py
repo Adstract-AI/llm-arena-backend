@@ -29,10 +29,13 @@ class BattleVoteRevealResponseSerializer(serializers.Serializer):
     model_name = serializers.CharField()
     provider_name = serializers.CharField()
     provider_display_name = serializers.CharField()
+    is_winner = serializers.BooleanField()
 
 
 class BattleVoteResponseSerializer(serializers.Serializer):
     battle_id = serializers.UUIDField()
     choice = serializers.ChoiceField(choices=BattleVote.VoteChoice.choices)
     feedback = serializers.CharField(allow_blank=True)
+    winner_provider_name = serializers.CharField(allow_null=True)
+    winner_model_name = serializers.CharField(allow_null=True)
     responses = BattleVoteRevealResponseSerializer(many=True)

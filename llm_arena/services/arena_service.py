@@ -50,7 +50,7 @@ class ArenaService(AbstractService):
         selected_models = self._select_random_models()
         battle = ArenaBattle.objects.create(
             prompt=normalized_prompt,
-            status=ArenaBattle.BattleStatus.PENDING,
+            status=ArenaBattle.BattleStatus.CREATED,
         )
 
         shuffled_slots = list(BattleResponse.ResponseSlot.values)

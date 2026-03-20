@@ -59,12 +59,16 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
             feedback=serializer.validated_data.get("feedback", ""),
         )
         battle = self.service.get_battle_by_battle_id(battle_id)
+        responses = list(battle.responses.order_by("slot"))
+        winning_response = next((response for response in responses if response.slot == vote.choice), None)
 
         response_serializer = BattleVoteResponseSerializer(
             {
                 "battle_id": battle.battle_id,
                 "choice": vote.choice,
                 "feedback": vote.feedback,
+                "winner_provider_name": winning_response.llm_model.provider.name if winning_response else None,
+                "winner_model_name": winning_response.llm_model.name if winning_response else None,
                 "responses": [
                     {
                         "slot": response.slot,
@@ -72,9 +76,10 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
                         "model_name": response.llm_model.name,
                         "provider_name": response.llm_model.provider.name,
                         "provider_display_name": response.llm_model.provider.display_name,
+                        "is_winner": response.slot == vote.choice,
                     }
                     for response in battle.responses.order_by("slot")
                 ],
             }
         )
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
