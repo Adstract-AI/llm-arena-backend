@@ -14,7 +14,8 @@ class Command(BaseCommand):
             provider, created = LLMProvider.objects.update_or_create(
                 name=provider_seed.name,
                 defaults={
-                    "provider_type": provider_seed.provider_type,
+                    "display_name": provider_seed.display_name,
+                    "description": provider_seed.description,
                     "api_base_url": provider_seed.api_base_url,
                 },
             )

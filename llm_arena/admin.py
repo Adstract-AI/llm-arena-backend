@@ -5,22 +5,22 @@ from llm_arena.models import ArenaBattle, BattleResponse, BattleVote, LLMModel, 
 
 @admin.register(LLMProvider)
 class LLMProviderAdmin(admin.ModelAdmin):
-    list_display = ("name", "provider_type", "api_base_url", "created_at")
-    list_filter = ("provider_type",)
-    search_fields = ("name", "provider_type", "api_base_url")
+    list_display = ("name", "display_name", "api_base_url", "created_at")
+    search_fields = ("name", "display_name", "description", "api_base_url")
 
 
 @admin.register(LLMModel)
 class LLMModelAdmin(admin.ModelAdmin):
     list_display = (
         "name",
+        "external_model_id",
         "provider",
         "is_active",
         "is_fine_tuned",
         "is_macedonian_optimized",
     )
     list_filter = ("provider", "is_active", "is_fine_tuned", "is_macedonian_optimized")
-    search_fields = ("name", "description", "provider__name")
+    search_fields = ("name", "external_model_id", "description", "provider__name")
 
 
 class BattleResponseInline(admin.TabularInline):

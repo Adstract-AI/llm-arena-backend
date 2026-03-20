@@ -16,7 +16,8 @@ class LLMProvider(TimestampedModel):
     """Store the provider responsible for serving one or more arena models."""
 
     name = models.CharField(max_length=100, unique=True)
-    provider_type = models.CharField(max_length=32)
+    display_name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
     api_base_url = models.URLField(blank=True)
 
     class Meta:
@@ -35,6 +36,7 @@ class LLMModel(TimestampedModel):
         related_name="models",
     )
     name = models.CharField(max_length=150)
+    external_model_id = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     is_fine_tuned = models.BooleanField(default=False)
@@ -43,6 +45,12 @@ class LLMModel(TimestampedModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "external_model_id"],
+                name="unique_provider_external_model_id",
+            ),
+        ]
         indexes = [
             models.Index(fields=["is_active"]),
             models.Index(fields=["is_fine_tuned"]),

@@ -15,5 +15,8 @@ DEFAULT_POSTGRES_DB = "llm_arena"
 DEFAULT_POSTGRES_USER = "llm_arena"
 DEFAULT_POSTGRES_PASSWORD = "llm_arena"
 
+DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120
+DEFAULT_FINKI_BASE_URL = "https://pna.finki.ukim.mk/v1"
+
 DEFAULT_TIME_ZONE = "Europe/Skopje"
 TRUE_ENV_VALUES = {"1", "true", "yes", "on"}

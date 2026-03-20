@@ -33,8 +33,9 @@ class Command(BaseCommand):
             provider = provider_lookup[model_seed.provider_name]
             model, created = LLMModel.objects.update_or_create(
                 provider=provider,
-                name=model_seed.name,
+                external_model_id=model_seed.external_model_id,
                 defaults={
+                    "name": model_seed.name,
                     "description": model_seed.description,
                     "is_active": model_seed.is_active,
                     "is_fine_tuned": model_seed.is_fine_tuned,
