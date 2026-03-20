@@ -1,0 +1,23 @@
+# General Guidelines (Always Apply)
+
+- Never create migrations. Migrations are handled manually by the project owner.
+- Do not keep deprecated/backward-compat API behavior unless explicitly requested.
+- Do not add logger usage in views; logging belongs in services/pipeline/signals.
+- Use f-string logging format (not `%` formatting).
+- Service business logic should live in service classes, not models/views.
+- Service methods should be instance methods unless explicitly required otherwise.
+- Every new service method must have full type hints and a docstring.
+- Any change to method/function logic or signature that affects behavior must include a docstring update.
+- Use app-specific custom exceptions where appropriate.
+- Add explicit error handling and failure mapping.
+- Keep code concise; add short explanatory comments where logic is non-obvious or where a small comment materially improves readability.
+- Do not remove useful explanatory comments just to keep a patch smaller. Preserve or add concise comments when they help clarify architectural paths, fallback behavior, or other non-obvious flow.
+- Fix typo-driven naming issues in code-facing identifiers when found.
+- Typos and bad spelling in prompts/instructions should be corrected by inferring the intended meaning.
+- Do not document mistake history in code comments/docstrings.
+- When fixing incorrect code, implement the correct behavior directly without comments like "fixed previous bug" or "not done here because old approach was wrong."
+- Comments/docstrings must explain purpose and behavior, not past development errors.
+- Guidelines are implicit operating rules for the agent and should be followed silently.
+- Do not restate guideline compliance in normal summaries (example: do not say "no migrations were generated as requested") unless the user explicitly asks for a compliance report.
+- Do not restate implementation decisions given as instructions in docstrings or comments. Docstrings and comments describe what the code does and why, not the reasoning that led to its design (e.g. do not write "X is stored here because Y is already stored elsewhere").
+- Do not describe data placement or ownership in docstrings (e.g. "X is carried on Y, not on Z" or "every Y carries X so that…"). Where a field lives is visible from the code itself. Docstrings should describe behavior and purpose, not narrate structural decisions.
