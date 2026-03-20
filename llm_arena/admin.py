@@ -3,6 +3,16 @@ from django.contrib import admin
 from llm_arena.models import ArenaBattle, BattleResponse, BattleVote, LLMModel, LLMProvider
 
 
+@admin.action(description="Mark selected models as active")
+def make_models_active(modeladmin, request, queryset):
+    queryset.update(is_active=True)
+
+
+@admin.action(description="Mark selected models as inactive")
+def make_models_inactive(modeladmin, request, queryset):
+    queryset.update(is_active=False)
+
+
 @admin.register(LLMProvider)
 class LLMProviderAdmin(admin.ModelAdmin):
     list_display = ("name", "display_name", "api_base_url", "created_at")
@@ -21,6 +31,7 @@ class LLMModelAdmin(admin.ModelAdmin):
     )
     list_filter = ("provider", "is_active", "is_fine_tuned", "is_macedonian_optimized")
     search_fields = ("name", "external_model_id", "description", "provider__name")
+    actions = (make_models_active, make_models_inactive)
 
 
 class BattleResponseInline(admin.TabularInline):
@@ -36,8 +47,8 @@ class BattleVoteInline(admin.StackedInline):
 
 @admin.register(ArenaBattle)
 class ArenaBattleAdmin(admin.ModelAdmin):
-    list_display = ("id", "status", "prompt_language", "created_at", "completed_at")
-    list_filter = ("status", "prompt_language")
+    list_display = ("id", "battle_id", "status", "created_at", "completed_at")
+    list_filter = ("status",)
     search_fields = ("prompt", "error_message")
     inlines = (BattleResponseInline, BattleVoteInline)
 

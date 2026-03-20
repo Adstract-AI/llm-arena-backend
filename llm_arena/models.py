@@ -68,6 +68,7 @@ class ArenaBattle(TimestampedModel):
 
     class BattleStatus(models.TextChoices):
         PENDING = "pending", "Pending"
+        AWAITING_VOTE = "awaiting_vote", "Awaiting Vote"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
@@ -78,8 +79,7 @@ class ArenaBattle(TimestampedModel):
         choices=BattleStatus.choices,
         default=BattleStatus.PENDING,
     )
-    prompt_language = models.CharField(max_length=32, blank=True)
-    error_message = models.TextField(blank=True)
+    error_message = models.TextField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -122,7 +122,8 @@ class BattleResponse(TimestampedModel):
         default=ResponseStatus.PENDING,
     )
     response_text = models.TextField(blank=True)
-    error_message = models.TextField(blank=True)
+    error_message = models.TextField(null=True, blank=True)
+    finish_reason = models.CharField(max_length=50, null=True, blank=True)
     prompt_tokens = models.PositiveIntegerField(
         null=True,
         blank=True,

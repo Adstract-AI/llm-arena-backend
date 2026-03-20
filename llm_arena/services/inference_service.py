@@ -23,12 +23,14 @@ from llm_arena.exceptions import (
 )
 from llm_arena.models import LLMModel
 from llm_arena.services.chat_finki import ChatFinki
+from llm_arena.services.llm_content_service import LLMContentService
 from llm_arena.services.llm_model_service import LLMModelService
 
 
 class ArenaInferenceService(AbstractService):
     """Route prompt inference to the correct LangChain chat model implementation."""
 
+    content_service = LLMContentService()
     llm_model_service = LLMModelService()
 
     def generate_response_details(
@@ -76,7 +78,7 @@ class ArenaInferenceService(AbstractService):
         usage = additional_kwargs.get("usage") or response_metadata.get("token_usage") or response_metadata.get("usage") or {}
 
         return {
-            "response_text": ChatFinki._extract_response_content(response.content),
+            "response_text": self.content_service.extract_response_content(response.content),
             "finish_reason": additional_kwargs.get("finish_reason") or response_metadata.get("finish_reason", ""),
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),

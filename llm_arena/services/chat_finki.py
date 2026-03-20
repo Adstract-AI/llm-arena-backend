@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from helpers.env_variables import FINKI_BASE_URL, LLM_REQUEST_TIMEOUT_SECONDS
+from llm_arena.services.llm_content_service import LLMContentService
 
 
 class ChatFinki(BaseChatModel):
@@ -46,7 +47,7 @@ class ChatFinki(BaseChatModel):
         response_data = response.json()
         choice_data = response_data["choices"][0]
         message_data = choice_data["message"]
-        content = self._extract_response_content(message_data.get("content", ""))
+        content = LLMContentService.extract_response_content(message_data.get("content", ""))
 
         return ChatResult(
             generations=[
@@ -84,27 +85,5 @@ class ChatFinki(BaseChatModel):
         }
         return {
             "role": role_map.get(message.type, "user"),
-            "content": ChatFinki._stringify_content(message.content),
+            "content": LLMContentService.stringify_content(message.content),
         }
-
-    @staticmethod
-    def _stringify_content(content: Any) -> str:
-        """Normalize message content into plain text for the Macedonian endpoint."""
-        if isinstance(content, str):
-            return content
-
-        if isinstance(content, list):
-            text_parts = []
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text_parts.append(str(item.get("text", "")))
-                elif isinstance(item, str):
-                    text_parts.append(item)
-            return "\n".join(part for part in text_parts if part)
-
-        return str(content)
-
-    @staticmethod
-    def _extract_response_content(content: Any) -> str:
-        """Normalize completion content from either string or content-block formats."""
-        return ChatFinki._stringify_content(content)

@@ -29,13 +29,12 @@ class ArenaService(AbstractService):
     inference_service = ArenaInferenceService()
 
     @transaction.atomic
-    def create_battle(self, prompt: str, prompt_language: str = "") -> ArenaBattle:
+    def create_battle(self, prompt: str) -> ArenaBattle:
         """
         Create a battle, run two random active models, and persist all generated outputs.
 
         Args:
             prompt: The user prompt to compare across two models.
-            prompt_language: Optional prompt language label stored with the battle.
 
         Returns:
             ArenaBattle: The completed persisted battle.
@@ -51,7 +50,6 @@ class ArenaService(AbstractService):
         selected_models = self._select_random_models()
         battle = ArenaBattle.objects.create(
             prompt=normalized_prompt,
-            prompt_language=prompt_language.strip(),
             status=ArenaBattle.BattleStatus.PENDING,
         )
 
@@ -72,7 +70,7 @@ class ArenaService(AbstractService):
                 )
                 persisted_response.response_text = response_details["response_text"]
                 persisted_response.status = BattleResponse.ResponseStatus.COMPLETED
-                persisted_response.error_message = ""
+                persisted_response.error_message = None
                 persisted_response.finish_reason = response_details["finish_reason"]
                 persisted_response.prompt_tokens = response_details["prompt_tokens"]
                 persisted_response.completion_tokens = response_details["completion_tokens"]
@@ -86,7 +84,7 @@ class ArenaService(AbstractService):
                 )
                 persisted_response.status = BattleResponse.ResponseStatus.FAILED
                 persisted_response.error_message = str(exc.detail)
-                persisted_response.finish_reason = ""
+                persisted_response.finish_reason = None
                 persisted_response.save()
                 generation_errors.append(str(exc.detail))
             except Exception as exc:
@@ -96,7 +94,7 @@ class ArenaService(AbstractService):
                 )
                 persisted_response.status = BattleResponse.ResponseStatus.FAILED
                 persisted_response.error_message = "Model generation failed."
-                persisted_response.finish_reason = ""
+                persisted_response.finish_reason = None
                 persisted_response.save()
                 generation_errors.append("Model generation failed.")
 
@@ -107,8 +105,8 @@ class ArenaService(AbstractService):
             battle.save()
             raise ArenaBattleGenerationFailedException()
 
-        battle.status = ArenaBattle.BattleStatus.COMPLETED
-        battle.error_message = ""
+        battle.status = ArenaBattle.BattleStatus.AWAITING_VOTE
+        battle.error_message = None
         battle.completed_at = timezone.now()
         battle.save()
         return battle
@@ -132,17 +130,20 @@ class ArenaService(AbstractService):
             ArenaBattleAlreadyVotedException: If a vote already exists for the battle.
         """
         battle = self.get_battle_by_battle_id(battle_id)
-        if battle.status != ArenaBattle.BattleStatus.COMPLETED:
+        if battle.status != ArenaBattle.BattleStatus.AWAITING_VOTE:
             raise ArenaBattleNotReadyForVoteException()
 
         if hasattr(battle, "vote"):
             raise ArenaBattleAlreadyVotedException()
 
-        return BattleVote.objects.create(
+        vote = BattleVote.objects.create(
             battle=battle,
             choice=choice,
             feedback=feedback.strip(),
         )
+        battle.status = ArenaBattle.BattleStatus.COMPLETED
+        battle.save(update_fields=["status", "updated_at"])
+        return vote
 
     def get_battle_by_battle_id(self, battle_id: UUID) -> ArenaBattle:
         """

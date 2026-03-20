@@ -24,14 +24,12 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
 
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
-            prompt_language=serializer.validated_data.get("prompt_language", ""),
         )
 
         response_serializer = BattleCreateResponseSerializer(
             {
                 "battle_id": battle.battle_id,
                 "prompt": battle.prompt,
-                "prompt_language": battle.prompt_language,
                 "responses": [
                     {
                         "slot": response.slot,

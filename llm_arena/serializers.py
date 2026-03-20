@@ -5,7 +5,6 @@ from llm_arena.models import BattleResponse, BattleVote
 
 class BattleCreateRequestSerializer(serializers.Serializer):
     prompt = serializers.CharField()
-    prompt_language = serializers.CharField(required=False, allow_blank=True, max_length=32)
 
 
 class BattleResponseSerializer(serializers.Serializer):
@@ -16,7 +15,6 @@ class BattleResponseSerializer(serializers.Serializer):
 class BattleCreateResponseSerializer(serializers.Serializer):
     battle_id = serializers.UUIDField()
     prompt = serializers.CharField()
-    prompt_language = serializers.CharField(allow_blank=True)
     responses = BattleResponseSerializer(many=True)
 
 
