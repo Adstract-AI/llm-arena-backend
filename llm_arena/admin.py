@@ -5,9 +5,9 @@ from llm_arena.models import ArenaBattle, BattleResponse, BattleVote, LLMModel, 
 
 @admin.register(LLMProvider)
 class LLMProviderAdmin(admin.ModelAdmin):
-    list_display = ("name", "provider_type", "is_active", "created_at")
-    list_filter = ("provider_type", "is_active")
-    search_fields = ("name", "slug")
+    list_display = ("name", "provider_type", "api_base_url", "created_at")
+    list_filter = ("provider_type",)
+    search_fields = ("name", "provider_type", "api_base_url")
 
 
 @admin.register(LLMModel)
@@ -15,13 +15,12 @@ class LLMModelAdmin(admin.ModelAdmin):
     list_display = (
         "name",
         "provider",
-        "external_model_id",
         "is_active",
         "is_fine_tuned",
         "is_macedonian_optimized",
     )
     list_filter = ("provider", "is_active", "is_fine_tuned", "is_macedonian_optimized")
-    search_fields = ("name", "slug", "external_model_id")
+    search_fields = ("name", "description", "provider__name")
 
 
 class BattleResponseInline(admin.TabularInline):
@@ -39,7 +38,7 @@ class BattleVoteInline(admin.StackedInline):
 class ArenaBattleAdmin(admin.ModelAdmin):
     list_display = ("id", "status", "prompt_language", "created_at", "completed_at")
     list_filter = ("status", "prompt_language")
-    search_fields = ("prompt", "requester_identifier")
+    search_fields = ("prompt", "error_message")
     inlines = (BattleResponseInline, BattleVoteInline)
 
 
@@ -47,11 +46,11 @@ class ArenaBattleAdmin(admin.ModelAdmin):
 class BattleResponseAdmin(admin.ModelAdmin):
     list_display = ("id", "battle", "slot", "llm_model", "status", "latency_ms")
     list_filter = ("slot", "status", "llm_model__provider")
-    search_fields = ("battle__prompt", "llm_model__name", "llm_model__external_model_id")
+    search_fields = ("battle__prompt", "llm_model__name", "error_message", "response_text")
 
 
 @admin.register(BattleVote)
 class BattleVoteAdmin(admin.ModelAdmin):
     list_display = ("id", "battle", "choice", "created_at")
     list_filter = ("choice",)
-    search_fields = ("battle__prompt", "voter_identifier")
+    search_fields = ("battle__prompt", "feedback")

@@ -15,16 +15,8 @@ class TimestampedModel(models.Model):
 class LLMProvider(TimestampedModel):
     """Store the provider responsible for serving one or more arena models."""
 
-    class ProviderType(models.TextChoices):
-        OPENAI = "openai", "OpenAI"
-        ANTHROPIC = "anthropic", "Anthropic"
-        GOOGLE = "google", "Google"
-        META = "meta", "Meta"
-        HUGGINGFACE = "huggingface", "Hugging Face"
-        CUSTOM = "custom", "Custom"
-
     name = models.CharField(max_length=100, unique=True)
-    provider_type = models.CharField(max_length=32, choices=ProviderType.choices)
+    provider_type = models.CharField(max_length=32)
     api_base_url = models.URLField(blank=True)
 
     class Meta:
@@ -51,12 +43,6 @@ class LLMModel(TimestampedModel):
 
     class Meta:
         ordering = ["name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["provider", "external_model_id"],
-                name="unique_provider_external_model_id",
-            ),
-        ]
         indexes = [
             models.Index(fields=["is_active"]),
             models.Index(fields=["is_fine_tuned"]),
