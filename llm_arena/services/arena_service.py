@@ -79,7 +79,7 @@ class ArenaService(AbstractService):
                 persisted_response.save()
             except LLMInferenceException as exc:
                 logger.exception(
-                    f"Battle generation failed for battle {battle.battle_id} and model "
+                    f"Battle generation failed for battle {battle.id} and model "
                     f"{persisted_response.llm_model.name}"
                 )
                 persisted_response.status = BattleResponse.ResponseStatus.FAILED
@@ -89,7 +89,7 @@ class ArenaService(AbstractService):
                 generation_errors.append(str(exc.detail))
             except Exception as exc:
                 logger.exception(
-                    f"Unexpected battle generation failure for battle {battle.battle_id} and model "
+                    f"Unexpected battle generation failure for battle {battle.id} and model "
                     f"{persisted_response.llm_model.name}"
                 )
                 persisted_response.status = BattleResponse.ResponseStatus.FAILED
@@ -117,7 +117,7 @@ class ArenaService(AbstractService):
         Persist a vote for a completed battle that has not been voted on yet.
 
         Args:
-            battle_id: Public UUID identifier for the battle.
+            battle_id: UUID primary key for the battle.
             choice: The selected vote choice.
             feedback: Optional free-text user feedback.
 
@@ -129,7 +129,7 @@ class ArenaService(AbstractService):
             ArenaBattleNotReadyForVoteException: If the battle is not completed.
             ArenaBattleAlreadyVotedException: If a vote already exists for the battle.
         """
-        battle = self.get_battle_by_battle_id(battle_id)
+        battle = self.get_battle(battle_id)
         if battle.status != ArenaBattle.BattleStatus.AWAITING_VOTE:
             raise ArenaBattleNotReadyForVoteException()
 
@@ -145,12 +145,12 @@ class ArenaService(AbstractService):
         battle.save(update_fields=["status", "updated_at"])
         return vote
 
-    def get_battle_by_battle_id(self, battle_id: UUID) -> ArenaBattle:
+    def get_battle(self, battle_id: UUID) -> ArenaBattle:
         """
-        Retrieve a battle by its public UUID with related responses and vote preloaded.
+        Retrieve a battle by its UUID primary key with related responses and vote preloaded.
 
         Args:
-            battle_id: Public UUID identifier for the battle.
+            battle_id: UUID primary key for the battle.
 
         Returns:
             ArenaBattle: The matched persisted battle.
@@ -162,7 +162,7 @@ class ArenaService(AbstractService):
             ArenaBattle.objects
             .prefetch_related("responses__llm_model__provider")
             .select_related("vote")
-            .filter(battle_id=battle_id)
+            .filter(id=battle_id)
             .first()
         )
         if battle is None:

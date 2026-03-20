@@ -77,7 +77,7 @@ class ArenaBattle(TimestampedModel):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
-    battle_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     prompt = models.TextField()
     status = models.CharField(
         max_length=16,

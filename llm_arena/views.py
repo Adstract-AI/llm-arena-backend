@@ -28,7 +28,7 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
 
         response_serializer = BattleCreateResponseSerializer(
             {
-                "battle_id": battle.battle_id,
+                "id": battle.id,
                 "prompt": battle.prompt,
                 "responses": [
                     {
@@ -52,19 +52,19 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        battle_id = kwargs["battle_id"]
+        battle_id = kwargs["id"]
         vote = self.service.submit_vote(
             battle_id=battle_id,
             choice=serializer.validated_data["choice"],
             feedback=serializer.validated_data.get("feedback", ""),
         )
-        battle = self.service.get_battle_by_battle_id(battle_id)
+        battle = self.service.get_battle(battle_id)
         responses = list(battle.responses.order_by("slot"))
         winning_response = next((response for response in responses if response.slot == vote.choice), None)
 
         response_serializer = BattleVoteResponseSerializer(
             {
-                "battle_id": battle.battle_id,
+                "id": battle.id,
                 "choice": vote.choice,
                 "feedback": vote.feedback,
                 "winner_provider_name": winning_response.llm_model.provider.name if winning_response else None,

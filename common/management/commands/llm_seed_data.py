@@ -188,4 +188,37 @@ MODEL_SEEDS = (
             "family": "vezilka",
         },
     ),
+    ModelSeed(
+        provider_name="finki",
+        name="vezilka-4b-it-fp32",
+        external_model_id="finki_ukim/vezilka:4b-it-fp32",
+        description="Macedonian FINKI Vezilka model in fp32 format with 128K context.",
+        is_macedonian_optimized=True,
+        configuration={
+            "source": "official_finki_endpoint",
+            "family": "vezilka",
+        },
+    ),
+    ModelSeed(
+        provider_name="finki",
+        name="vezilka-4b-it-q4-k-m",
+        external_model_id="finki_ukim/vezilka:4b-it-q4_K_M",
+        description="Macedonian FINKI Vezilka quantized q4_K_M model with 128K context.",
+        is_macedonian_optimized=True,
+        configuration={
+            "source": "official_finki_endpoint",
+            "family": "vezilka",
+        },
+    ),
+    ModelSeed(
+        provider_name="finki",
+        name="vezilka-4b-it-q8-0",
+        external_model_id="finki_ukim/vezilka:4b-it-q8_0",
+        description="Macedonian FINKI Vezilka quantized q8_0 model with 128K context.",
+        is_macedonian_optimized=True,
+        configuration={
+            "source": "official_finki_endpoint",
+            "family": "vezilka",
+        },
+    ),
 )

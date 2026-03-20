@@ -47,7 +47,7 @@ class BattleVoteInline(admin.StackedInline):
 
 @admin.register(ArenaBattle)
 class ArenaBattleAdmin(admin.ModelAdmin):
-    list_display = ("id", "battle_id", "status", "created_at", "completed_at")
+    list_display = ("id", "status", "created_at", "completed_at")
     list_filter = ("status",)
     search_fields = ("prompt", "error_message")
     inlines = (BattleResponseInline, BattleVoteInline)

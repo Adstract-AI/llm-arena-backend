@@ -13,7 +13,7 @@ class BattleResponseSerializer(serializers.Serializer):
 
 
 class BattleCreateResponseSerializer(serializers.Serializer):
-    battle_id = serializers.UUIDField()
+    id = serializers.UUIDField()
     prompt = serializers.CharField()
     responses = BattleResponseSerializer(many=True)
 
@@ -33,7 +33,7 @@ class BattleVoteRevealResponseSerializer(serializers.Serializer):
 
 
 class BattleVoteResponseSerializer(serializers.Serializer):
-    battle_id = serializers.UUIDField()
+    id = serializers.UUIDField()
     choice = serializers.ChoiceField(choices=BattleVote.VoteChoice.choices)
     feedback = serializers.CharField(allow_blank=True)
     winner_provider_name = serializers.CharField(allow_null=True)
