@@ -64,6 +64,21 @@ def python_command() -> list[str]:
     return [sys.executable, "manage.py"]
 
 
+def create_default_superuser() -> subprocess.CompletedProcess[str] | None:
+    """Create or update the default local admin superuser."""
+    shell_code = (
+        "from django.contrib.auth import get_user_model;"
+        "User = get_user_model();"
+        "user, _ = User.objects.get_or_create(username='admin', defaults={'is_staff': True, 'is_superuser': True});"
+        "user.is_staff = True;"
+        "user.is_superuser = True;"
+        "user.set_password('admin');"
+        "user.save();"
+        "print('Default admin superuser is ready.')"
+    )
+    return run_command(python_command() + ["shell", "-c", shell_code])
+
+
 def perform_hard_reset(auto_confirm: bool = False) -> bool:
     """Run the local database reset flow for this project."""
 
@@ -84,8 +99,11 @@ def perform_hard_reset(auto_confirm: bool = False) -> bool:
         ("Stopping Docker services and removing volumes", lambda: run_command(["docker", "compose", "down", "-v"])),
         ("Starting PostgreSQL service", lambda: run_command(["docker", "compose", "up", "-d", "db"])),
         ("Waiting for PostgreSQL to be ready", wait_for_postgres),
+        ("Creating migrations", lambda: run_command(python_command() + ["makemigrations"])),
         ("Running migrations", lambda: run_command(python_command() + ["migrate"])),
-        ("Seeding LLM catalog", lambda: run_command(python_command() + ["seed_llm_catalog"])),
+        ("Seeding LLM providers", lambda: run_command(python_command() + ["seed_llm_providers"])),
+        ("Seeding LLM models", lambda: run_command(python_command() + ["seed_llm_models"])),
+        ("Creating default admin user", create_default_superuser),
     ]
 
     for index, (step_name, step_function) in enumerate(steps, start=1):

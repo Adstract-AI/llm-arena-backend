@@ -1,0 +1,49 @@
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+
+from common.management.commands.llm_seed_data import MODEL_SEEDS
+from llm_arena.models import LLMModel, LLMProvider
+
+
+class Command(BaseCommand):
+    help = "Seed the default LLM models for the arena."
+
+    @transaction.atomic
+    def handle(self, *args, **options) -> None:
+        provider_lookup = {
+            provider.name: provider
+            for provider in LLMProvider.objects.all()
+        }
+
+        missing_provider_names = sorted(
+            {
+                model_seed.provider_name
+                for model_seed in MODEL_SEEDS
+                if model_seed.provider_name not in provider_lookup
+            }
+        )
+        if missing_provider_names:
+            raise CommandError(
+                "Missing provider records for model seeding: "
+                + ", ".join(missing_provider_names)
+                + ". Run `python manage.py seed_llm_providers` first."
+            )
+
+        for model_seed in MODEL_SEEDS:
+            provider = provider_lookup[model_seed.provider_name]
+            model, created = LLMModel.objects.update_or_create(
+                provider=provider,
+                name=model_seed.name,
+                defaults={
+                    "description": model_seed.description,
+                    "is_active": model_seed.is_active,
+                    "is_fine_tuned": model_seed.is_fine_tuned,
+                    "is_macedonian_optimized": model_seed.is_macedonian_optimized,
+                    "configuration": model_seed.configuration,
+                },
+            )
+
+            action = "Created" if created else "Updated"
+            self.stdout.write(f"{action} model: {model.name}")
+
+        self.stdout.write(self.style.SUCCESS("LLM model seeding completed."))
