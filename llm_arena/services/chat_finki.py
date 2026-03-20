@@ -49,6 +49,14 @@ class ChatFinki(BaseChatModel):
         message_data = choice_data["message"]
         content = LLMContentService.extract_response_content(message_data.get("content", ""))
 
+        llm_output = {
+            "response_id": response_data.get("id"),
+            "created": response_data.get("created"),
+            "model": response_data.get("model"),
+            "system_fingerprint": response_data.get("system_fingerprint"),
+            "usage": response_data.get("usage", {}),
+            "raw_response": response_data,
+        }
         return ChatResult(
             generations=[
                 ChatGeneration(
@@ -65,14 +73,7 @@ class ChatFinki(BaseChatModel):
                     )
                 )
             ],
-            llm_output={
-                "response_id": response_data.get("id"),
-                "created": response_data.get("created"),
-                "model": response_data.get("model"),
-                "system_fingerprint": response_data.get("system_fingerprint"),
-                "usage": response_data.get("usage", {}),
-                "raw_response": response_data,
-            },
+            llm_output=llm_output,
         )
 
     @staticmethod

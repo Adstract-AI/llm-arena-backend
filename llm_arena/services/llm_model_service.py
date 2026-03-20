@@ -64,27 +64,3 @@ class LLMModelService(AbstractModelService[LLMModel]):
             )
 
         return model
-
-    def get_runtime_model_name(self, model: LLMModel) -> str:
-        """
-        Return the provider-facing runtime identifier for an LLM model.
-
-        Args:
-            model: The catalog model to resolve.
-
-        Returns:
-            str: The provider-facing model identifier.
-        """
-        return model.external_model_id
-
-    def get_provider_name(self, model: LLMModel) -> str:
-        """
-        Return the normalized provider routing name for an LLM model.
-
-        Args:
-            model: The catalog model to inspect.
-
-        Returns:
-            str: The normalized provider name used by the inference router.
-        """
-        return model.provider.name.strip().lower()

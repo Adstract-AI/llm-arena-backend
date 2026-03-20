@@ -41,29 +41,12 @@ PROVIDER_SEEDS = (
         api_base_url="https://generativelanguage.googleapis.com",
     ),
     ProviderSeed(
-        name="meta",
-        display_name="Meta",
-        description="Meta Llama models available for arena comparisons.",
-    ),
-    ProviderSeed(
-        name="hugging face",
-        display_name="Hugging Face",
-        description="Models and routing exposed through the Hugging Face platform.",
-        api_base_url="https://router.huggingface.co/v1",
-    ),
-    ProviderSeed(
         name="finki",
         display_name="FINKI",
         description="Macedonian models served through the FINKI OpenAI-compatible endpoint.",
         api_base_url="https://pna.finki.ukim.mk/v1",
-    ),
-    ProviderSeed(
-        name="other",
-        display_name="Other",
-        description="Fallback provider bucket for uncategorized external model sources.",
-    ),
+    )
 )
-
 
 MODEL_SEEDS = (
 

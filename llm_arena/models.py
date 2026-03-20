@@ -62,6 +62,11 @@ class LLMModel(TimestampedModel):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def provider_name(self) -> str:
+        """Return the normalized provider identifier for this model."""
+        return self.provider.name.strip().lower()
+
 
 class ArenaBattle(TimestampedModel):
     """Represent a single blind comparison request for one submitted prompt."""
