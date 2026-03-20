@@ -1,3 +1,82 @@
-from django.shortcuts import render
+from rest_framework import status
+from rest_framework.generics import CreateAPIView
+from rest_framework.response import Response
 
-# Create your views here.
+from common.abstract import ServiceView
+from llm_arena.serializers import (
+    BattleCreateRequestSerializer,
+    BattleCreateResponseSerializer,
+    BattleVoteRequestSerializer,
+    BattleVoteResponseSerializer,
+)
+from llm_arena.services.arena_service import ArenaService
+
+
+class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
+    """Create a new blind arena battle and return anonymized responses."""
+
+    service_class = ArenaService
+    serializer_class = BattleCreateRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        battle = self.service.create_battle(
+            prompt=serializer.validated_data["prompt"],
+            prompt_language=serializer.validated_data.get("prompt_language", ""),
+        )
+
+        response_serializer = BattleCreateResponseSerializer(
+            {
+                "battle_id": battle.battle_id,
+                "prompt": battle.prompt,
+                "prompt_language": battle.prompt_language,
+                "responses": [
+                    {
+                        "slot": response.slot,
+                        "response_text": response.response_text,
+                    }
+                    for response in battle.responses.order_by("slot")
+                ],
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
+    """Submit a vote for a completed battle and reveal model identities."""
+
+    service_class = ArenaService
+    serializer_class = BattleVoteRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        battle_id = kwargs["battle_id"]
+        vote = self.service.submit_vote(
+            battle_id=battle_id,
+            choice=serializer.validated_data["choice"],
+            feedback=serializer.validated_data.get("feedback", ""),
+        )
+        battle = self.service.get_battle_by_battle_id(battle_id)
+
+        response_serializer = BattleVoteResponseSerializer(
+            {
+                "battle_id": battle.battle_id,
+                "choice": vote.choice,
+                "feedback": vote.feedback,
+                "responses": [
+                    {
+                        "slot": response.slot,
+                        "response_text": response.response_text,
+                        "model_name": response.llm_model.name,
+                        "provider_name": response.llm_model.provider.name,
+                        "provider_display_name": response.llm_model.provider.display_name,
+                    }
+                    for response in battle.responses.order_by("slot")
+                ],
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)

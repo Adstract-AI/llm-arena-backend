@@ -22,11 +22,11 @@ class ChatFinki(BaseChatModel):
         return "finki_openai_compatible"
 
     def _generate(
-        self,
-        messages: list[BaseMessage],
-        stop: list[str] | None = None,
-        run_manager: Any | None = None,
-        **kwargs: Any,
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            run_manager: Any | None = None,
+            **kwargs: Any,
     ) -> ChatResult:
         payload: dict[str, Any] = {
             "model": self.model_name,
@@ -55,12 +55,23 @@ class ChatFinki(BaseChatModel):
                         content=content,
                         additional_kwargs={
                             "finish_reason": choice_data.get("finish_reason"),
+                            "response_id": response_data.get("id"),
+                            "response_model": response_data.get("model"),
+                            "system_fingerprint": response_data.get("system_fingerprint"),
+                            "usage": response_data.get("usage", {}),
                             "raw_response": response_data,
                         },
                     )
                 )
             ],
-            llm_output={"raw_response": response_data},
+            llm_output={
+                "response_id": response_data.get("id"),
+                "created": response_data.get("created"),
+                "model": response_data.get("model"),
+                "system_fingerprint": response_data.get("system_fingerprint"),
+                "usage": response_data.get("usage", {}),
+                "raw_response": response_data,
+            },
         )
 
     @staticmethod

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -29,14 +31,14 @@ class ArenaInferenceService(AbstractService):
 
     llm_model_service = LLMModelService()
 
-    def generate_response(
+    def generate_response_details(
         self,
         model: LLMModel,
         prompt: str,
         system_prompt: str | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """
-        Generate a text response for a prompt using the requested model.
+        Generate a response and normalized metadata for a catalog model.
 
         Args:
             model: Catalog model instance to invoke.
@@ -44,7 +46,7 @@ class ArenaInferenceService(AbstractService):
             system_prompt: Optional system instruction prepended to the message list.
 
         Returns:
-            The text content returned by the model.
+            dict[str, Any]: Response text and normalized provider metadata for persistence.
 
         Raises:
             MissingLLMConfigurationException: If provider credentials are missing.
@@ -69,7 +71,49 @@ class ArenaInferenceService(AbstractService):
         except Exception as exc:
             raise LLMInferenceException(detail=f"Inference failed for model '{runtime_model_name}'.") from exc
 
-        return ChatFinki._extract_response_content(response.content)
+        additional_kwargs = getattr(response, "additional_kwargs", {}) or {}
+        response_metadata = getattr(response, "response_metadata", {}) or {}
+        usage = additional_kwargs.get("usage") or response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+
+        return {
+            "response_text": ChatFinki._extract_response_content(response.content),
+            "finish_reason": additional_kwargs.get("finish_reason") or response_metadata.get("finish_reason", ""),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "raw_metadata": {
+                "additional_kwargs": additional_kwargs,
+                "response_metadata": response_metadata,
+            },
+        }
+
+    def generate_response(
+        self,
+        model: LLMModel,
+        prompt: str,
+        system_prompt: str | None = None,
+    ) -> str:
+        """
+        Generate a text response for a prompt using the requested model.
+
+        Args:
+            model: Catalog model instance to invoke.
+            prompt: The user prompt to send to the model.
+            system_prompt: Optional system instruction prepended to the message list.
+
+        Returns:
+            The text content returned by the model.
+
+        Raises:
+            MissingLLMConfigurationException: If provider credentials are missing.
+            UnsupportedLLMProviderException: If the model cannot be routed to a supported provider.
+            LLMInferenceException: If the provider call fails.
+        """
+        return self.generate_response_details(
+            model=model,
+            prompt=prompt,
+            system_prompt=system_prompt,
+        )["response_text"]
 
     def _build_chat_model(self, provider_name: str, model_name: str) -> BaseChatModel:
         """
@@ -123,7 +167,7 @@ class ArenaInferenceService(AbstractService):
         return ChatAnthropic(
             model_name=model_name,
             api_key=ANTHROPIC_API_KEY,
-            timeout=LLM_REQUEST_TIMEOUT_SECONDS
+            timeout=LLM_REQUEST_TIMEOUT_SECONDS,
         )
 
     def _build_google_chat_model(self, model_name: str) -> BaseChatModel:

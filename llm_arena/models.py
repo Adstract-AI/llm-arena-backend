@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -69,6 +71,7 @@ class ArenaBattle(TimestampedModel):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
+    battle_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     prompt = models.TextField()
     status = models.CharField(
         max_length=16,

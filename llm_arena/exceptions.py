@@ -41,3 +41,43 @@ class InactiveLLMModelException(LLMInferenceException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "LLM model is inactive."
     default_code = "inactive_llm_model"
+
+
+class InsufficientActiveLLMModelsException(LLMInferenceException):
+    """Raised when the arena cannot select two active models for a battle."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "At least two active LLM models are required to create a battle."
+    default_code = "insufficient_active_llm_models"
+
+
+class ArenaBattleGenerationFailedException(LLMInferenceException):
+    """Raised when one or more model generations fail during battle creation."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    default_detail = "Failed to generate battle responses."
+    default_code = "arena_battle_generation_failed"
+
+
+class ArenaBattleNotFoundException(LLMInferenceException):
+    """Raised when a battle UUID does not match any persisted arena battle."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "Arena battle not found."
+    default_code = "arena_battle_not_found"
+
+
+class ArenaBattleAlreadyVotedException(LLMInferenceException):
+    """Raised when a vote is submitted for a battle that already has a vote."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle already has a recorded vote."
+    default_code = "arena_battle_already_voted"
+
+
+class ArenaBattleNotReadyForVoteException(LLMInferenceException):
+    """Raised when a vote is submitted for a battle that is not complete."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Arena battle is not ready for voting."
+    default_code = "arena_battle_not_ready_for_vote"
