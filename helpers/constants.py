@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATABASE_MIGRATIONS_DIR = "migrations"
-DJANGO_APPS = ["common", "llm_arena"]
+DJANGO_APPS = ["common", "llm_arena", "chat"]
 
 DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 DEFAULT_DJANGO_DEBUG = True

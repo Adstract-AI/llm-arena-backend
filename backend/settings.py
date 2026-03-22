@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'rest_framework',
     'common',
+    'chat',
     'llm_arena',
 ]
 
