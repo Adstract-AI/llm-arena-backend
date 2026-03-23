@@ -5,6 +5,8 @@ DATABASE_MIGRATIONS_DIR = "migrations"
 DJANGO_APPS = ["common", "llm_arena", "chat"]
 
 DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+DEFAULT_CORS_ALLOWED_ORIGINS: list[str] = []
+DEFAULT_CSRF_TRUSTED_ORIGINS: list[str] = []
 DEFAULT_DJANGO_DEBUG = True
 DEFAULT_DJANGO_SECRET_KEY = "django-insecure-!7lt2nkdxe=yoj)ss^#e#da*-b$s3393$_!@^7ee_(xgm%f1wd"
 

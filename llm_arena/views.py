@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, ListAPIView
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 
 from common.abstract import ServiceView
@@ -9,9 +9,11 @@ from llm_arena.serializers import (
     BattleVoteRequestSerializer,
     BattleVoteResponseSerializer,
     LeaderboardEntrySerializer,
+    LLMModelDetailSerializer,
 )
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.leaderboard_service import LeaderboardService
+from llm_arena.services.llm_model_service import LLMModelService
 
 
 class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
@@ -96,4 +98,16 @@ class LeaderboardListView(ServiceView[LeaderboardService], ListAPIView):
     def list(self, request, *args, **kwargs):
         leaderboard = self.service.get_leaderboard()
         serializer = self.get_serializer(leaderboard, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class LLMModelDetailView(ServiceView[LLMModelService], RetrieveAPIView):
+    """Return a detailed model payload including stats and leaderboard-derived values."""
+
+    service_class = LLMModelService
+    serializer_class = LLMModelDetailSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        model_detail = self.service.get_model_detail(kwargs["model_name"])
+        serializer = self.get_serializer(model_detail)
         return Response(serializer.data, status=status.HTTP_200_OK)

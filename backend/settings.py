@@ -14,6 +14,8 @@ from pathlib import Path
 
 from helpers.constants import DEFAULT_TIME_ZONE
 from helpers.env_variables import (
+    CORS_ALLOWED_ORIGINS,
+    CSRF_TRUSTED_ORIGINS,
     DJANGO_ALLOWED_HOSTS,
     DJANGO_DEBUG,
     DJANGO_SECRET_KEY,
@@ -38,6 +40,8 @@ SECRET_KEY = DJANGO_SECRET_KEY
 DEBUG = DJANGO_DEBUG
 
 ALLOWED_HOSTS = DJANGO_ALLOWED_HOSTS
+CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS
+CSRF_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS
 
 
 # Application definition
@@ -49,6 +53,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'drf_spectacular',
     'rest_framework',
     'common',
@@ -58,6 +63,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
