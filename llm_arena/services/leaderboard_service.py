@@ -94,6 +94,44 @@ class LeaderboardService(AbstractService):
         )
         return [asdict(entry) for entry in leaderboard_entries]
 
+    def get_model_leaderboard_entry(self, model: LLMModel) -> dict[str, Any]:
+        """
+        Return leaderboard statistics for a single model.
+
+        Args:
+            model: Model to fetch leaderboard statistics for.
+
+        Returns:
+            dict[str, Any]: Leaderboard entry for the requested model.
+        """
+        leaderboard = self.get_leaderboard()
+        for entry in leaderboard:
+            if (
+                entry["provider_name"] == model.provider.name
+                and entry["model_name"] == model.name
+            ):
+                return entry
+
+        return asdict(
+            LeaderboardEntry(
+                model_name=model.name,
+                provider_name=model.provider.name,
+                provider_display_name=model.provider.display_name,
+                matches=0,
+                wins=0,
+                losses=0,
+                ties=0,
+                win_rate=0.0,
+                non_tie_win_rate=None,
+                elo_score=self.DEFAULT_ELO_SCORE,
+                avg_prompt_tokens=None,
+                avg_completion_tokens=None,
+                avg_total_tokens=None,
+                avg_latency_ms=None,
+                avg_response_length_chars=None,
+            )
+        )
+
     def _initialize_model_stats(self, model: LLMModel) -> dict[str, Any]:
         """
         Create the mutable accumulator for a single model.

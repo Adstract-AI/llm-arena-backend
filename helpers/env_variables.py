@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 from helpers.constants import (
     DEFAULT_ALLOWED_HOSTS,
+    DEFAULT_CORS_ALLOWED_ORIGINS,
+    DEFAULT_CSRF_TRUSTED_ORIGINS,
     DEFAULT_DJANGO_DEBUG,
     DEFAULT_DJANGO_SECRET_KEY,
     DEFAULT_FINKI_BASE_URL,
@@ -38,11 +40,24 @@ def get_int_env(name: str, default: int) -> int:
     return int(value)
 
 
+def append_unique(values: list[str], value: str) -> list[str]:
+    if value and value not in values:
+        values.append(value)
+    return values
+
+
 load_dotenv()
 
 DJANGO_SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", DEFAULT_DJANGO_SECRET_KEY)
 DJANGO_DEBUG = get_bool_env("DJANGO_DEBUG", default=DEFAULT_DJANGO_DEBUG)
 DJANGO_ALLOWED_HOSTS = get_list_env("DJANGO_ALLOWED_HOSTS", default=DEFAULT_ALLOWED_HOSTS)
+CORS_ALLOWED_ORIGINS = get_list_env("CORS_ALLOWED_ORIGINS", default=DEFAULT_CORS_ALLOWED_ORIGINS)
+CSRF_TRUSTED_ORIGINS = get_list_env("CSRF_TRUSTED_ORIGINS", default=DEFAULT_CSRF_TRUSTED_ORIGINS)
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+
+if RENDER_EXTERNAL_HOSTNAME:
+    append_unique(DJANGO_ALLOWED_HOSTS, RENDER_EXTERNAL_HOSTNAME)
+    append_unique(CSRF_TRUSTED_ORIGINS, f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", DEFAULT_POSTGRES_HOST)
 POSTGRES_PORT = os.environ.get("POSTGRES_PORT", DEFAULT_POSTGRES_PORT)
