@@ -18,7 +18,7 @@ class FinkiModelListView(ServiceView[ChatService], ListAPIView):
     serializer_class = FinkiModelSerializer
 
     def list(self, request, *args, **kwargs):
-        models = self.service.get_finki_models()
+        models = self.service.get_chat_supported_models()
         serializer = self.get_serializer(models, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

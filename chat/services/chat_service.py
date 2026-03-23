@@ -13,9 +13,10 @@ from chat.exceptions import (
     InvalidChatProviderException,
 )
 from chat.models import ChatMessage, ChatSession
-from chat.services.inference_service import ChatInferenceService
 from common.abstract import AbstractService
 from llm_arena.models import LLMModel
+from llm_arena.exceptions import LLMInferenceException
+from llm_arena.services.inference_service import ArenaInferenceService
 from llm_arena.services.llm_model_service import LLMModelService
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,9 @@ class ChatService(AbstractService):
     MEMORY_WINDOW_SIZE = 20
 
     llm_model_service = LLMModelService()
-    inference_service = ChatInferenceService()
+    inference_service = ArenaInferenceService()
 
-    def get_finki_models(self) -> QuerySet[LLMModel]:
+    def get_chat_supported_models(self) -> QuerySet[LLMModel]:
         """
         Return active models available for FINKI chat.
 
@@ -89,16 +90,16 @@ class ChatService(AbstractService):
         )
 
         try:
-            response_details = self.inference_service.generate_response_details(
+            response_details = self.inference_service.generate_response_details_with_history(
                 model=llm_model,
                 history_messages=history_messages,
                 prompt=normalized_message,
             )
-        except ChatInferenceFailedException:
+        except LLMInferenceException as exc:
             logger.exception(
                 f"Chat inference failed for session {session.id} and model {llm_model.name}"
             )
-            raise
+            raise ChatInferenceFailedException(detail=str(exc.detail)) from exc
 
         ChatMessage.objects.create(
             session=session,

@@ -4,16 +4,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 
 from llm_arena.models import LLMModel
-
-
-class TimestampedModel(models.Model):
-    """Provide created and updated timestamps for concrete chat models."""
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
+from common.models import TimestampedModel
 
 
 class ChatSession(TimestampedModel):

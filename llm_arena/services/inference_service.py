@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from common.abstract import AbstractService
 from llm_arena.exceptions import LLMInferenceException
@@ -18,10 +18,10 @@ class ArenaInferenceService(AbstractService):
     content_service = LLMContentService()
 
     def generate_response_details(
-        self,
-        model: LLMModel,
-        prompt: str,
-        system_prompt: str | None = None,
+            self,
+            model: LLMModel,
+            prompt: str,
+            system_prompt: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate a response and normalized metadata for a catalog model.
@@ -39,34 +39,98 @@ class ArenaInferenceService(AbstractService):
             UnsupportedLLMProviderException: If the model cannot be routed to a supported provider.
             LLMInferenceException: If the provider call fails.
         """
+        return self._generate_response_details(
+            model=model,
+            prompt=prompt,
+            history_messages=None,
+            system_prompt=system_prompt,
+        )
+
+    def generate_response_details_with_history(
+            self,
+            model: LLMModel,
+            history_messages: Sequence[Any],
+            prompt: str,
+            system_prompt: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Generate a response using persisted conversation history plus the current prompt.
+
+        Args:
+            model: Catalog model instance to invoke.
+            history_messages: Persisted prior messages used as chat memory.
+            prompt: The user prompt to send to the model.
+            system_prompt: Optional system instruction prepended to the message list.
+
+        Returns:
+            dict[str, Any]: Response text and normalized provider metadata for persistence.
+
+        Raises:
+            LLMInferenceException: If the provider call fails.
+        """
+        return self._generate_response_details(
+            model=model,
+            prompt=prompt,
+            history_messages=history_messages,
+            system_prompt=system_prompt,
+        )
+
+    def _generate_response_details(
+            self,
+            model: LLMModel,
+            prompt: str,
+            history_messages: Sequence[Any] | None,
+            system_prompt: str | None,
+    ) -> dict[str, Any]:
+        """
+        Shared inference implementation for arena and chat flows.
+
+        Args:
+            model: Catalog model instance to invoke.
+            prompt: The user prompt to send to the model.
+            history_messages: Optional persisted prior messages used as chat memory.
+            system_prompt: Optional system instruction prepended to the message list.
+
+        Returns:
+            dict[str, Any]: Response text and normalized provider metadata for persistence.
+
+        Raises:
+            LLMInferenceException: If the provider call fails.
+        """
         normalized_prompt = prompt.strip()
         if not normalized_prompt:
             raise LLMInferenceException(detail="A prompt is required for inference.")
 
         runtime_model_name = model.external_model_id
-        provider_name = model.provider_name
-        chat_model = self.llm_chat_factory_service.build_chat_model(
-            provider_name=provider_name,
-            model_name=runtime_model_name,
-        )
-
-        messages: list[BaseMessage] = []
-        if system_prompt:
-            messages.append(SystemMessage(content=system_prompt.strip()))
-        messages.append(HumanMessage(content=normalized_prompt))
-
         try:
+            chat_model = self.llm_chat_factory_service.build_chat_model(
+                provider_name=model.provider_name,
+                model_name=runtime_model_name,
+            )
+            messages = self._build_messages(
+                history_messages=history_messages,
+                prompt=normalized_prompt,
+                system_prompt=system_prompt,
+            )
             response = chat_model.invoke(messages)
         except Exception as exc:
-            raise LLMInferenceException(detail=f"Inference failed for model '{runtime_model_name}'.") from exc
+            raise LLMInferenceException(
+                detail=f"Inference failed for model '{runtime_model_name}'."
+            ) from exc
 
         additional_kwargs = getattr(response, "additional_kwargs", {}) or {}
         response_metadata = getattr(response, "response_metadata", {}) or {}
-        usage = additional_kwargs.get("usage") or response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+        usage = (
+                additional_kwargs.get("usage")
+                or response_metadata.get("token_usage")
+                or response_metadata.get("usage")
+                or {}
+        )
 
         return {
             "response_text": self.content_service.extract_response_content(response.content),
-            "finish_reason": additional_kwargs.get("finish_reason") or response_metadata.get("finish_reason", ""),
+            "finish_reason": additional_kwargs.get("finish_reason")
+                             or response_metadata.get("finish_reason", ""),
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),
             "total_tokens": usage.get("total_tokens"),
@@ -75,3 +139,53 @@ class ArenaInferenceService(AbstractService):
                 "response_metadata": response_metadata,
             },
         }
+
+    def _build_messages(self,
+                        history_messages: Sequence[Any] | None,
+                        prompt: str,
+                        system_prompt: str | None,
+                        ) -> list[BaseMessage]:
+        """
+        Build the LangChain message list for inference.
+
+        Args:
+            history_messages: Optional persisted chat history ordered oldest to newest.
+            prompt: Current user prompt.
+            system_prompt: Optional system instruction.
+
+        Returns:
+            list[BaseMessage]: Message list for provider invocation.
+        """
+        messages: list[BaseMessage] = []
+
+        if system_prompt and system_prompt.strip():
+            messages.append(SystemMessage(content=system_prompt.strip()))
+
+        for history_message in history_messages or []:
+            built_message = self._build_history_message(history_message)
+            if built_message is not None:
+                messages.append(built_message)
+
+        messages.append(HumanMessage(content=prompt))
+        return messages
+
+    @staticmethod
+    def _build_history_message(history_message: Any) -> BaseMessage | None:
+        """
+        Convert a persisted history message into its LangChain equivalent.
+
+        Args:
+            history_message: Persisted object exposing `role` and `content` attributes.
+
+        Returns:
+            BaseMessage | None: Converted LangChain message or None for unsupported roles.
+        """
+        role = str(getattr(history_message, "role", "")).strip().lower()
+        content = getattr(history_message, "content", "")
+        if role == "user":
+            return HumanMessage(content=content)
+        if role == "assistant":
+            return AIMessage(content=content)
+        if role == "system":
+            return SystemMessage(content=content)
+        return None
