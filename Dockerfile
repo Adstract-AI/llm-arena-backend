@@ -13,4 +13,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python manage.py setup_project --full-auto && python manage.py runserver 0.0.0.0:${PORT:-8000}"]
+CMD ["sh", "-c", "python manage.py cold_start_setup --full-auto && python manage.py runserver 0.0.0.0:${PORT:-8000}"]
