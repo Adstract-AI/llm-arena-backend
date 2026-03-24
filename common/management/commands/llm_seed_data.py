@@ -105,7 +105,6 @@ MODEL_SEEDS = (
         name="gpt-4.1-nano",
         external_model_id="gpt-4.1-nano",
         description="Fastest GPT-4.1-class variant for lightweight, high-volume tasks.",
-        is_active=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-4.1",
@@ -197,7 +196,7 @@ MODEL_SEEDS = (
         description="Macedonian FINKI Vezilka model in fp32 format with 128K context.",
         is_macedonian_optimized=True,
         is_fine_tuned=True,
-        is_active=False,
+        is_active=True,
         configuration={
             "source": "official_finki_endpoint",
             "family": "vezilka",
@@ -210,7 +209,7 @@ MODEL_SEEDS = (
         description="Macedonian FINKI Vezilka quantized q4_K_M model with 128K context.",
         is_macedonian_optimized=True,
         is_fine_tuned=True,
-        is_active=False,
+        is_active=True,
         configuration={
             "source": "official_finki_endpoint",
             "family": "vezilka",
@@ -223,7 +222,7 @@ MODEL_SEEDS = (
         description="Macedonian FINKI Vezilka quantized q8_0 model with 128K context.",
         is_macedonian_optimized=True,
         is_fine_tuned=True,
-        is_active=False,
+        is_active=True,
         configuration={
             "source": "official_finki_endpoint",
             "family": "vezilka",
