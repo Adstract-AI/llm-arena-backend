@@ -1,21 +1,32 @@
 from rest_framework import serializers
 
-from llm_arena.models import BattleResponse, BattleVote
+from llm_arena.models import ArenaBattle, BattleResponse, BattleVote
 
 
 class BattleCreateRequestSerializer(serializers.Serializer):
     prompt = serializers.CharField()
 
 
-class BattleResponseSerializer(serializers.Serializer):
+class BattleTurnCreateRequestSerializer(serializers.Serializer):
+    prompt = serializers.CharField()
+
+
+class ArenaTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
 
 
-class BattleCreateResponseSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
+class ArenaTurnSerializer(serializers.Serializer):
+    turn_number = serializers.IntegerField()
     prompt = serializers.CharField()
-    responses = BattleResponseSerializer(many=True)
+    responses = ArenaTurnResponseSerializer(many=True)
+
+
+class ArenaBattleSnapshotSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
+    can_vote = serializers.BooleanField()
+    turns = ArenaTurnSerializer(many=True)
 
 
 class BattleVoteRequestSerializer(serializers.Serializer):
@@ -23,22 +34,35 @@ class BattleVoteRequestSerializer(serializers.Serializer):
     feedback = serializers.CharField(required=False, allow_blank=True)
 
 
-class BattleVoteRevealResponseSerializer(serializers.Serializer):
+class BattleVoteRevealModelSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
-    response_text = serializers.CharField()
     model_name = serializers.CharField()
     provider_name = serializers.CharField()
     provider_display_name = serializers.CharField()
     is_winner = serializers.BooleanField()
 
 
+class BattleVoteTurnResponseSerializer(serializers.Serializer):
+    slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
+    response_text = serializers.CharField()
+    is_winner = serializers.BooleanField()
+
+
+class BattleVoteTurnSerializer(serializers.Serializer):
+    turn_number = serializers.IntegerField()
+    prompt = serializers.CharField()
+    responses = BattleVoteTurnResponseSerializer(many=True)
+
+
 class BattleVoteResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
     choice = serializers.ChoiceField(choices=BattleVote.VoteChoice.choices)
     feedback = serializers.CharField(allow_blank=True)
     winner_provider_name = serializers.CharField(allow_null=True)
     winner_model_name = serializers.CharField(allow_null=True)
-    responses = BattleVoteRevealResponseSerializer(many=True)
+    models = BattleVoteRevealModelSerializer(many=True)
+    turns = BattleVoteTurnSerializer(many=True)
 
 
 class LeaderboardEntrySerializer(serializers.Serializer):

@@ -60,20 +60,29 @@ class LLMModel(TimestampedModel):
 
 
 class ArenaBattle(TimestampedModel):
-    """Represent a single blind comparison request for one submitted prompt."""
+    """Represent a multi-turn blind comparison session between two fixed models."""
 
     class BattleStatus(models.TextChoices):
-        CREATED = "created", "Created"
+        IN_PROGRESS = "in_progress", "In Progress"
         AWAITING_VOTE = "awaiting_vote", "Awaiting Vote"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    prompt = models.TextField()
+    model_a = models.ForeignKey(
+        LLMModel,
+        on_delete=models.PROTECT,
+        related_name="arena_battles_as_model_a",
+    )
+    model_b = models.ForeignKey(
+        LLMModel,
+        on_delete=models.PROTECT,
+        related_name="arena_battles_as_model_b",
+    )
     status = models.CharField(
         max_length=16,
         choices=BattleStatus.choices,
-        default=BattleStatus.CREATED,
+        default=BattleStatus.IN_PROGRESS,
     )
     error_message = models.TextField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -88,9 +97,62 @@ class ArenaBattle(TimestampedModel):
     def __str__(self) -> str:
         return f"Battle #{self.pk}"
 
+    def get_model_for_slot(self, slot: str) -> LLMModel:
+        """
+        Return the fixed model assigned to an anonymized slot for this battle.
+
+        Args:
+            slot: Response slot identifier.
+
+        Returns:
+            LLMModel: The model assigned to the selected slot.
+        """
+        if slot == BattleResponse.ResponseSlot.A:
+            return self.model_a
+        return self.model_b
+
+
+class ArenaTurn(TimestampedModel):
+    """Store one user prompt turn within an arena battle conversation."""
+
+    class TurnStatus(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    battle = models.ForeignKey(
+        ArenaBattle,
+        on_delete=models.CASCADE,
+        related_name="turns",
+    )
+    turn_number = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    prompt = models.TextField()
+    status = models.CharField(
+        max_length=16,
+        choices=TurnStatus.choices,
+        default=TurnStatus.IN_PROGRESS,
+    )
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["turn_number", "created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["battle", "turn_number"],
+                name="unique_battle_turn_number",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["battle", "turn_number"]),
+            models.Index(fields=["battle", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.battle} - Turn {self.turn_number}"
+
 
 class BattleResponse(TimestampedModel):
-    """Store one model output generated during a battle."""
+    """Store one slot-specific model output generated during a battle turn."""
 
     class ResponseSlot(models.TextChoices):
         A = "A", "Answer A"
@@ -101,15 +163,10 @@ class BattleResponse(TimestampedModel):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
-    battle = models.ForeignKey(
-        ArenaBattle,
+    turn = models.ForeignKey(
+        ArenaTurn,
         on_delete=models.CASCADE,
         related_name="responses",
-    )
-    llm_model = models.ForeignKey(
-        LLMModel,
-        on_delete=models.PROTECT,
-        related_name="battle_responses",
     )
     slot = models.CharField(max_length=1, choices=ResponseSlot.choices)
     status = models.CharField(
@@ -146,20 +203,26 @@ class BattleResponse(TimestampedModel):
         ordering = ["slot"]
         constraints = [
             models.UniqueConstraint(
-                fields=["battle", "slot"],
-                name="unique_battle_response_slot",
-            ),
-            models.UniqueConstraint(
-                fields=["battle", "llm_model"],
-                name="unique_battle_response_model",
+                fields=["turn", "slot"],
+                name="unique_turn_response_slot",
             ),
         ]
         indexes = [
-            models.Index(fields=["battle", "status"]),
+            models.Index(fields=["turn", "status"]),
         ]
 
     def __str__(self) -> str:
-        return f"{self.battle} - {self.get_slot_display()}"
+        return f"{self.turn} - {self.get_slot_display()}"
+
+    @property
+    def battle(self) -> ArenaBattle:
+        """Return the parent battle for this response."""
+        return self.turn.battle
+
+    @property
+    def llm_model(self) -> LLMModel:
+        """Return the fixed model assigned to this response slot."""
+        return self.turn.battle.get_model_for_slot(self.slot)
 
 
 class BattleVote(TimestampedModel):

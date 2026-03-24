@@ -81,3 +81,11 @@ class ArenaBattleNotReadyForVoteException(LLMInferenceException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Arena battle is not ready for voting."
     default_code = "arena_battle_not_ready_for_vote"
+
+
+class ArenaBattleNotContinuableException(LLMInferenceException):
+    """Raised when a follow-up turn is requested for a terminal battle."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle cannot continue."
+    default_code = "arena_battle_not_continuable"
