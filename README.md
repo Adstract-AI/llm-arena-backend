@@ -74,3 +74,12 @@ The local [docker-compose.yml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-are
 - `db`
 
 This is useful when you want to run the frontend separately or connect an already running frontend to the backend API.
+
+## Production Docker
+For a deployment-style backend image, use [Dockerfile.deployment](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/Dockerfile.deployment#L1).
+
+It:
+- installs the backend dependencies
+- copies the Django project into the image
+- runs migrations on container startup
+- starts Gunicorn instead of Django `runserver`

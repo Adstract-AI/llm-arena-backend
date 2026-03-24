@@ -3,40 +3,14 @@
 
 import argparse
 import os
-import subprocess
-import sys
 import time
 
 from helpers.constants import ROOT
 from helpers.env_variables import POSTGRES_DB, POSTGRES_USER
-
-
-def run_command(command: list[str], capture_output: bool = False) -> subprocess.CompletedProcess[str] | None:
-    """Run a subprocess command from the project root."""
-    try:
-        return subprocess.run(
-            command,
-            cwd=ROOT,
-            capture_output=capture_output,
-            text=True,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        print(f"Error running command: {' '.join(command)}")
-        print(f"Return code: {exc.returncode}")
-        if capture_output:
-            print(f"stdout: {exc.stdout}")
-            print(f"stderr: {exc.stderr}")
-        return None
-
-
-def confirm_step(step_name: str, auto_confirm: bool = False) -> bool:
-    """Ask for confirmation before a destructive step."""
-    if auto_confirm:
-        print(f"[AUTO] Proceeding with {step_name}...")
-        return True
-
-    return input(f"Proceed with {step_name}? (y/N): ").strip().lower() == "y"
+from helpers.project_setup import (
+    python_command,
+    run_command, confirm_step,
+)
 
 
 def wait_for_postgres() -> bool:
@@ -57,26 +31,6 @@ def wait_for_postgres() -> bool:
 
     print("ERROR: PostgreSQL failed to start within the timeout period.")
     return False
-
-
-def python_command() -> list[str]:
-    """Build a Python command using the currently active interpreter."""
-    return [sys.executable, "manage.py"]
-
-
-def create_default_superuser() -> subprocess.CompletedProcess[str] | None:
-    """Create or update the default local admin superuser."""
-    shell_code = (
-        "from django.contrib.auth import get_user_model;"
-        "User = get_user_model();"
-        "user, _ = User.objects.get_or_create(username='admin', defaults={'is_staff': True, 'is_superuser': True});"
-        "user.is_staff = True;"
-        "user.is_superuser = True;"
-        "user.set_password('admin');"
-        "user.save();"
-        "print('Default admin superuser is ready.')"
-    )
-    return run_command(python_command() + ["shell", "-c", shell_code])
 
 
 def perform_hard_reset(auto_confirm: bool = False) -> bool:
@@ -100,10 +54,12 @@ def perform_hard_reset(auto_confirm: bool = False) -> bool:
         ("Starting PostgreSQL service", lambda: run_command(["docker", "compose", "up", "-d", "db"])),
         ("Waiting for PostgreSQL to be ready", wait_for_postgres),
         ("Creating migrations", lambda: run_command(python_command() + ["makemigrations"])),
-        ("Running migrations", lambda: run_command(python_command() + ["migrate"])),
-        ("Seeding LLM providers", lambda: run_command(python_command() + ["seed_llm_providers"])),
-        ("Seeding LLM models", lambda: run_command(python_command() + ["seed_llm_models"])),
-        ("Creating default admin user", create_default_superuser),
+        (
+            "Running project setup",
+            lambda: run_command(
+                python_command() + ["setup_project"] + (["--full-auto"] if auto_confirm else [])
+            ),
+        ),
     ]
 
     for index, (step_name, step_function) in enumerate(steps, start=1):
