@@ -1,0 +1,741 @@
+openapi: 3.0.1
+info:
+  title: llm-arena
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /api/chat/models/:
+    get:
+      summary: Chat - Get Models
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+              example:
+                - name: vezilka-4b-it-fp16
+                  external_model_id: finki_ukim/vezilka:4b-it-fp16
+                  description: >-
+                    Macedonian instruction-tuned FINKI model exposed through the
+                    FINKI OpenAI-compatible endpoint.
+      security: []
+  /api/chat/messages/:
+    post:
+      summary: Chat - Send follow-up
+      deprecated: false
+      description: ''
+      tags: []
+      parameters:
+        - name: Content-Type
+          in: header
+          description: ''
+          required: false
+          example: application/json
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider_name:
+                  type: string
+                model_name:
+                  type: string
+                message:
+                  type: string
+                session_id:
+                  type: string
+              required:
+                - provider_name
+                - model_name
+                - message
+                - session_id
+            example:
+              provider_name: finki
+              model_name: vezilka-4b-it-fp16
+              message: Дали мислиш дека Македонија е убаво место?
+              session_id: '{{SESSION_ID}}'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+              example:
+                session_id: 0f8f5519-3e67-4cd5-8ae5-82cbd68ffaba
+                response_text: >-
+                  Македонија е позната по својата природна убавина, културно
+                  наследство и традиции. Има многу интересни локации и заштитени
+                  подрачја кои вреди да се посетат. Сепак, тоа е прашање на
+                  личен вкус. Некои луѓе можат да ја најдат убава и вредна за
+                  посета, додека други можат да имаат различни мислења.
+                model_name: vezilka-4b-it-fp16
+                provider_name: finki
+          headers: {}
+      security: []
+  /api/arena/battles/:
+    post:
+      summary: start_battle
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+              required:
+                - prompt
+            example:
+              prompt: Explain what friendship means in Macedonian.
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  can_vote:
+                    type: boolean
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                            required:
+                              - slot
+                              - response_text
+                required:
+                  - id
+                  - status
+                  - can_vote
+                  - turns
+              examples:
+                '1':
+                  summary: Success
+                  value:
+                    id: 4015110d-53b8-4fd6-86a0-5a3cf5517e28
+                    status: awaiting_vote
+                    can_vote: true
+                    turns:
+                      - turn_number: 1
+                        prompt: Explain what friendship means in Macedonian.
+                        responses:
+                          - slot: A
+                            response_text: >-
+                              Во македонскиот јазик, пријателството е сфатено
+                              како сложен однос кој се гради врз доверба, почит
+                              и заеднички искуства. Пријателите се луѓе кои се
+                              поддржуваат, се разбираат и можат да се сметаат за
+                              доверливи. Тие споделуваат емоции, мисли и идеи,
+                              често се вклучуваат во активности заедно и можат
+                              да донесат радост или утеха во животот на едни со
+                              други. Пријателството не е само за да се има многу
+                              луѓе во животот, туку и за да се негуваат длабоки,
+                              значајни врски со неколку избрани поединци.
+                          - slot: B
+                            response_text: >-
+                              Во македонскиот јазик, „пријателство“ означува
+                              блиска и доверлива врска меѓу луѓето. Тоа е врска
+                              основана на доверба, почит, поддршка и верност.
+                              Пријатели се луѓето со кои споделуваме радости и
+                              тешкотии, со кои имаме заеднички интереси и
+                              чувства. Во суштина, пријателството е една од
+                              најважните вредности во македонската култура,
+                              претставувајќи близок и долгогодишен однос кој ги
+                              збогатува животите на луѓето.
+          headers: {}
+      security: []
+  /api/arena/battles/BATTLE_ID/turns/:
+    post:
+      summary: continue_battle
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example:
+              prompt: Do you want to be friends?
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  can_vote:
+                    type: boolean
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                            required:
+                              - slot
+                              - response_text
+                      required:
+                        - turn_number
+                        - prompt
+                        - responses
+                required:
+                  - id
+                  - status
+                  - can_vote
+                  - turns
+              example:
+                id: c43b0c64-0d1b-4e1c-8917-296b8697edd8
+                status: awaiting_vote
+                can_vote: true
+                turns:
+                  - turn_number: 1
+                    prompt: Explain what friendship means in Macedonian.
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Во македонскиот јазик, зборот за пријателство е
+                          „пријателство“ (преведено како „prijatelstvo“), а
+                          пријател е „пријател“ („prijatel“). Љубовта и односите
+                          што ги поврзуваат луѓето како пријатели се сметаат за
+                          важен дел од социјалниот живот и културата. 
+
+
+                          Пријателството во македонската култура означува
+                          длабока врска, доверба, меѓусебна поддршка и разбирање
+                          меѓу луѓето. Тоа е однос што се гради со време и се
+                          заснова на искреност, лојалност и заеднички вредности.
+                          Пријателите се важни за дадење емоционална поддршка,
+                          споделување на моменти, радости и тешкотии, како и за
+                          создавање чувство на припадност во заедницата.
+                      - slot: B
+                        response_text: >-
+                          Пријателството во македонскиот јазик се однесува на
+                          врска која се гради врз доверба, почит и заеднички
+                          искуства. Тоа вклучува да се имаат меѓусебно доверба и
+                          поддршка, да се споделуваат чувства и да се биде тука
+                          еден за друг во добри и лоши моменти. Пријателите
+                          често се покрај нас во тешки времиња, ни помагаат да
+                          се справиме со стресот и предизвиците, и можат да
+                          донесат радост и смеа во нашите животи. Преку
+                          пријателството, можеме да стекнеме нови перспективи,
+                          да учиме едни од други и да се чувствуваме како да
+                          припаѓаме на нешто значајно.
+                  - turn_number: 2
+                    prompt: Do you want to be friends?
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Како вештачка интелигенција, немам чувствa или лични
+                          врски како пријателство, но тука сум за да ти
+                          помогнам, поддржам и да ти одговорам на сите прашања.
+                          Меѓутоа, со задоволство можам да ти бидам добар
+                          сојузник и пријател за информациите што ти се
+                          потребни!
+                      - slot: B
+                        response_text: >-
+                          Како вештачка интелигенција, немам лични желби или
+                          пријателства. Сепак, јас сум секогаш тука да помогнам
+                          и да дадам корисни информации. Ако ти треба помош или
+                          имаш прашања, слободно прашај!
+                  - turn_number: 3
+                    prompt: Do you want to be friends?
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Јас како вештачка интелигенција немам чувства или
+                          лични врски, но со радост сум тука за тебе, да ти
+                          помогнам, да разговараме и да ти бидам поддршка. Ако
+                          имаш нешто што сакаш да споделиш или прашање што те
+                          интересира, слободно прашај!
+                      - slot: B
+                        response_text: >-
+                          Како асистент со вештачка интелигенција, немам лични
+                          преференции или пријателства. Сепак, тука сум да
+                          помогнам и да дадам корисни информации. Ако имате
+                          некои прашања или ви треба помош, слободно прашајте!
+          headers: {}
+      security: []
+  /api/arena/battles/BATTLE_ID/:
+    get:
+      summary: get_battle_details
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  can_vote:
+                    type: boolean
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                            required:
+                              - slot
+                              - response_text
+                      required:
+                        - turn_number
+                        - prompt
+                        - responses
+                required:
+                  - id
+                  - status
+                  - can_vote
+                  - turns
+              example:
+                id: 5e2ee76f-6c3c-449d-8ba6-e847549e2efc
+                status: awaiting_vote
+                can_vote: true
+                turns:
+                  - turn_number: 1
+                    prompt: Explain what friendship means in Macedonian.
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Во македонскиот јазик, зборот за пријателство е
+                          „пријателство“ или „пријателство“. Тој означува блиска
+                          врска или сродство меѓу луѓе кои се чувствуваат
+                          пријатно и доверливо еден кон друг. Пријателството
+                          подразбира заемна поддршка, разбирање, верност и
+                          споделување на заеднички интереси и чувства. Тоа е
+                          вредност што го засилува социјалниот живот и создава
+                          трајни врски меѓу луѓето.
+                      - slot: B
+                        response_text: >-
+                          Пријателството значи многу во македонскиот јазик и
+                          култура. Тоа претставува еден од највредните односи во
+                          животот на една личност, кој се гради на доверба,
+                          меѓусебно разбирање и поддршка. Пријателите се луѓе
+                          кои се тука еден за друг во добри и лоши времиња,
+                          нудат искрени совети и помош, и создаваат спомени кои
+                          траат цел живот. 
+
+
+                          Пријателството може да биде извор на радост и утеха,
+                          но и партнер во решавање на проблеми и споделување на
+                          лични искуства. Во македонската култура, традиционално
+                          се слави и негува, со многу обичаи и прослави кои ги
+                          обединуваат пријателите. 
+
+
+                          На крајот, пријателството е повеќе од само заедничко
+                          проживување; тоа е врска која го збогатува животот на
+                          секој човек и го прави пополн со љубов и разбирање.
+                  - turn_number: 2
+                    prompt: Do you want to be friends?
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Јас како вештачка интелигенција, нудејќи поддршка и
+                          разговори, можам да бидам твојот винамен асистент и
+                          пријател во она што ти треба. Ако сакаш, можеме да
+                          продолжиме да комуницираме и да се дружиме преку
+                          разговори!
+                      - slot: B
+                        response_text: >-
+                          Како вештачка интелигенција, немам лични желби или
+                          чувства, но јас сум тука да помогнам и да обезбедам
+                          информации за пријателството. Ако имаш било какви
+                          прашања, потреби или ти треба помош поврзана со
+                          пријателството, слободно прашај!
+          headers: {}
+      security: []
+  /api/arena/battles/BATTLE_ID/vote/:
+    post:
+      summary: vote
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                choice:
+                  type: string
+                feedback:
+                  type: string
+                  nullable: true
+              required:
+                - choice
+            example:
+              choice: A
+              feedback: Answer was clearer and more natural.
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  choice:
+                    type: string
+                  feedback:
+                    type: string
+                  winner_provider_name:
+                    type: string
+                  winner_model_name:
+                    type: string
+                  responses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slot:
+                          type: string
+                        response_text:
+                          type: string
+                        model_name:
+                          type: string
+                        provider_name:
+                          type: string
+                        provider_display_name:
+                          type: string
+                        is_winner:
+                          type: boolean
+                      required:
+                        - slot
+                        - response_text
+                        - model_name
+                        - provider_name
+                        - provider_display_name
+                        - is_winner
+                required:
+                  - id
+                  - choice
+                  - feedback
+                  - winner_provider_name
+                  - winner_model_name
+                  - responses
+              example:
+                id: 62c2d9e5-f177-42d7-99a0-18b1905a0089
+                choice: A
+                feedback: Answer A was clearer and more natural.
+                winner_provider_name: openai
+                winner_model_name: gpt-4.1-mini
+                responses:
+                  - slot: A
+                    response_text: >-
+                      Пријателството во македонски значи особена врска помеѓу
+                      луѓе која се базира на меѓусебна доверба, почит и
+                      поддршка. Пријателите се оние на кои можеш да им се
+                      довериш, со нив да споделиш радости и тешкотии, и кои се
+                      покрај тебе во секој момент. Пријателството претставува
+                      емоционална блискост и взаемна грижа, која ја збогатува
+                      животната приказна и ја прави посмислена.
+                    model_name: gpt-4.1-mini
+                    provider_name: openai
+                    provider_display_name: OpenAI
+                    is_winner: true
+                  - slot: B
+                    response_text: >-
+                      Пријателството значи многу во македонскиот јазик. Тоа е
+                      еден од највредните односи во животот, каде што две лица
+                      се зближуваат преку заеднички искуства, меѓусебна поддршка
+                      и разбирање. Пријателите се луѓе кои се тука еден за друг
+                      во добри и лоши времиња, и кои можат да споделат смеа,
+                      радост, како и да се соочат со предизвици заедно. Во
+                      македонската култура, пријателството често се изразува
+                      преку различни ритуали и традиции, како што се заеднички
+                      оброци, празнувања и активности. Тоа е сложен и динамичен
+                      процес кој бара посветеност и взаемност.
+                    model_name: vezilka-4b-it-fp16
+                    provider_name: finki
+                    provider_display_name: FINKI
+                    is_winner: false
+          headers: {}
+      security: []
+  /api/arena/leaderboard/:
+    get:
+      summary: leaderboard
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    model_name:
+                      type: string
+                    provider_name:
+                      type: string
+                    provider_display_name:
+                      type: string
+                    matches:
+                      type: integer
+                    wins:
+                      type: integer
+                    losses:
+                      type: integer
+                    ties:
+                      type: integer
+                    win_rate:
+                      type: number
+                    non_tie_win_rate:
+                      type: number
+                    elo_score:
+                      type: number
+                    avg_prompt_tokens:
+                      type: number
+                    avg_completion_tokens:
+                      type: number
+                    avg_total_tokens:
+                      type: number
+                    avg_latency_ms:
+                      type: number
+                      nullable: true
+                    avg_response_length_chars:
+                      type: number
+                  required:
+                    - model_name
+                    - provider_name
+                    - provider_display_name
+                    - matches
+                    - wins
+                    - losses
+                    - ties
+                    - win_rate
+                    - non_tie_win_rate
+                    - elo_score
+                    - avg_prompt_tokens
+                    - avg_completion_tokens
+                    - avg_total_tokens
+                    - avg_response_length_chars
+              example:
+                - model_name: gpt-4.1-nano
+                  provider_name: openai
+                  provider_display_name: OpenAI
+                  matches: 2
+                  wins: 1
+                  losses: 1
+                  ties: 0
+                  win_rate: 0.5
+                  non_tie_win_rate: 0.5
+                  elo_score: 1001.47
+                  avg_prompt_tokens: 15
+                  avg_completion_tokens: 152.5
+                  avg_total_tokens: 167.5
+                  avg_latency_ms: null
+                  avg_response_length_chars: 437.5
+                - model_name: vezilka-4b-it-fp16
+                  provider_name: finki
+                  provider_display_name: FINKI
+                  matches: 2
+                  wins: 1
+                  losses: 1
+                  ties: 0
+                  win_rate: 0.5
+                  non_tie_win_rate: 0.5
+                  elo_score: 998.53
+                  avg_prompt_tokens: 17
+                  avg_completion_tokens: 161
+                  avg_total_tokens: 178
+                  avg_latency_ms: null
+                  avg_response_length_chars: 451.5
+          headers: {}
+      security: []
+  /api/arena/models/vezilka-4b-it-fp16/:
+    get:
+      summary: model_description
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  external_model_id:
+                    type: string
+                  description:
+                    type: string
+                  provider_name:
+                    type: string
+                  provider_display_name:
+                    type: string
+                  provider_description:
+                    type: string
+                  is_fine_tuned:
+                    type: boolean
+                  is_macedonian_optimized:
+                    type: boolean
+                  matches:
+                    type: integer
+                  wins:
+                    type: integer
+                  losses:
+                    type: integer
+                  ties:
+                    type: integer
+                  win_rate:
+                    type: number
+                  non_tie_win_rate:
+                    type: number
+                  elo_score:
+                    type: number
+                  avg_prompt_tokens:
+                    type: number
+                  avg_completion_tokens:
+                    type: number
+                  avg_total_tokens:
+                    type: number
+                  avg_latency_ms:
+                    type: number
+                    nullable: true
+                  avg_response_length_chars:
+                    type: number
+                required:
+                  - name
+                  - external_model_id
+                  - description
+                  - provider_name
+                  - provider_display_name
+                  - provider_description
+                  - is_fine_tuned
+                  - is_macedonian_optimized
+                  - matches
+                  - wins
+                  - losses
+                  - ties
+                  - win_rate
+                  - non_tie_win_rate
+                  - elo_score
+                  - avg_prompt_tokens
+                  - avg_completion_tokens
+                  - avg_total_tokens
+                  - avg_response_length_chars
+              example:
+                name: vezilka-4b-it-fp16
+                external_model_id: finki_ukim/vezilka:4b-it-fp16
+                description: >-
+                  Macedonian instruction-tuned FINKI model exposed through the
+                  FINKI OpenAI-compatible endpoint.
+                provider_name: finki
+                provider_display_name: FINKI
+                provider_description: >-
+                  Macedonian models served through the FINKI OpenAI-compatible
+                  endpoint.
+                is_fine_tuned: true
+                is_macedonian_optimized: true
+                matches: 2
+                wins: 1
+                losses: 1
+                ties: 0
+                win_rate: 0.5
+                non_tie_win_rate: 0.5
+                elo_score: 998.53
+                avg_prompt_tokens: 17
+                avg_completion_tokens: 161
+                avg_total_tokens: 178
+                avg_latency_ms: null
+                avg_response_length_chars: 451.5
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []

@@ -1,0 +1,14 @@
+Django==5.2.8
+djangorestframework==3.16.1
+django-cors-headers>=4.7,<5.0
+drf-spectacular>=0.28,<1.0
+python-dotenv==1.1.1
+psycopg[binary]==3.2.12
+gunicorn>=23.0,<24.0
+whitenoise>=6.9,<7.0
+requests>=2.32,<3.0
+langchain>=1.2,<2.0
+langchain-core>=1.2,<2.0
+langchain-openai>=1.1,<2.0
+langchain-anthropic>=0.3,<2.0
+langchain-google-genai>=4.2,<5.0
