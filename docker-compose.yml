@@ -18,13 +18,13 @@ services:
       context: .
     env_file:
       - ./.env
-    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
-    command: python manage.py runserver 0.0.0.0:8000
     environment:
+      PORT: "${PORT}"
       POSTGRES_HOST: ${POSTGRES_HOST:-db}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      AUTO_START_SETUP: ${AUTO_START_SETUP:-false}
     ports:
-      - "8000:8000"
+      - "${PORT}:8000"
     volumes:
       - ./:/app
     depends_on:

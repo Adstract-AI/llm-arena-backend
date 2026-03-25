@@ -1,14 +1,16 @@
 # LLM Arena Backend
 
 ## Overview
-This backend powers the API for LLM Arena, a blind evaluation platform for comparing large language models through human preference voting.
+This backend powers the API for LLM Arena, a platform for blind evaluation and direct exploration of large language models.
 
 The main flow is:
-- a user submits one prompt
+- a user starts a battle with one prompt
 - the backend sends that prompt to two different models
 - the frontend shows the answers as anonymous response A and response B
-- the user votes for the better answer, or marks them as equal
-- the backend stores the battle, responses, and vote for later analysis
+- the user can continue the same battle with additional prompts across multiple turns
+- the user votes on the full conversation transcript, not just the opening turn
+- the backend stores the battle, turns, responses, and vote for later analysis
+- the project also includes a direct chat flow where the user selects a Vezilka model and chats with it normally
 
 The project is focused on evaluating Macedonian fine-tuned LLMs alongside global providers.
 
@@ -31,7 +33,13 @@ This starts:
 - backend on `http://localhost:8000`
 - postgres on `localhost:5432`
 
-The backend container waits for Postgres and runs migrations automatically on startup.
+The backend container waits for Postgres and runs setup automatically on startup.
+
+That startup flow also:
+- seeds the database with the required initial data
+- creates a default superuser with username `admin` and password `admin`
+
+After the first cold start, you can disable this automatic setup behavior by setting `AUTO_START_SETUP=false`.
 
 ### Environment
 Use `.env.example` as the template and create a local `.env` file.
@@ -50,23 +58,22 @@ Important variables:
 - `FINKI_BASE_URL`
 
 ## API Endpoints
-Useful local endpoints:
-- `http://localhost:8000/api/docs/` for Swagger UI
-- `http://localhost:8000/api/schema/` for the OpenAPI schema
-- `http://localhost:8000/api/arena/leaderboard/` for leaderboard data
-- `http://localhost:8000/api/arena/battles/` to create a new battle
-- `http://localhost:8000/api/arena/battles/<uuid>/vote/` to submit a vote
-- `http://localhost:8000/api/arena/models/<model_name>/` for model details
+
+For detailed endpoint specifications and descriptions, see the files in [api_docs](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs):
+- [llm-arena.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/llm-arena.openapi.yaml) for the arena endpoints
+- [chat.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/chat.openapi.yaml) for the chat endpoints
 
 ## Project Purpose
 This service is responsible for:
 - selecting two LLMs for a battle
-- sending the same prompt to both models
-- anonymizing and returning the responses
-- storing prompts, responses, metadata, and votes
+- sending every turn prompt to both models
+- anonymizing and returning the full transcript snapshot
+- storing turns, responses, metadata, and final conversation votes
+- exposing direct chat endpoints for chosen Vezilka models
+- storing chat sessions and chat messages
 - exposing leaderboard and model-related API endpoints
 
-The backend is designed around blind comparison, randomized response ordering, and persistent storage of evaluation results.
+The backend is designed around blind comparison, randomized response ordering, multi-turn battle conversations, direct Vezilka chat, and persistent storage of evaluation results.
 
 ## Local Compose Services
 The local [docker-compose.yml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/docker-compose.yml) in this folder starts only:
@@ -74,3 +81,24 @@ The local [docker-compose.yml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-are
 - `db`
 
 This is useful when you want to run the frontend separately or connect an already running frontend to the backend API.
+
+## Production Docker
+For a deployment-style backend image, use [Dockerfile.deployment](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/Dockerfile.deployment#L1).
+
+It:
+- installs the backend dependencies
+- copies the Django project into the image
+- runs migrations on container startup
+- starts the backend with the current deployment startup command
+
+## Project Context
+This project was developed as part of the Vezilka project under the guidance of Assistant Teachers Ema Pandilova and Dimitar Peshevski.
+
+The student developers are:
+- Andrea Stevanoska
+- Viktor Kostadinoski
+- Gorazd Filipovski
+
+All contributors listed above are from the Faculty of Computer Science and Engineering (FINKI), Skopje.
+
+FINKI also developed, trained, and fine-tuned all Vezilka models used in this broader project context.

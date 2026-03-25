@@ -4,8 +4,9 @@ from rest_framework.response import Response
 
 from common.abstract import ServiceView
 from llm_arena.serializers import (
+    ArenaBattleSnapshotSerializer,
     BattleCreateRequestSerializer,
-    BattleCreateResponseSerializer,
+    BattleTurnCreateRequestSerializer,
     BattleVoteRequestSerializer,
     BattleVoteResponseSerializer,
     LeaderboardEntrySerializer,
@@ -17,7 +18,7 @@ from llm_arena.services.llm_model_service import LLMModelService
 
 
 class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
-    """Create a new blind arena battle and return anonymized responses."""
+    """Create a new blind arena battle and return the full anonymous transcript snapshot."""
 
     service_class = ArenaService
     serializer_class = BattleCreateRequestSerializer
@@ -29,25 +30,46 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
         )
-
-        response_serializer = BattleCreateResponseSerializer(
-            {
-                "id": battle.id,
-                "prompt": battle.prompt,
-                "responses": [
-                    {
-                        "slot": response.slot,
-                        "response_text": response.response_text,
-                    }
-                    for response in battle.responses.order_by("slot")
-                ],
-            }
+        response_serializer = ArenaBattleSnapshotSerializer(
+            self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
+class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
+    """Append a new prompt turn to an existing arena battle and return the full transcript."""
+
+    service_class = ArenaService
+    serializer_class = BattleTurnCreateRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        battle = self.service.continue_battle(
+            battle_id=kwargs["id"],
+            prompt=serializer.validated_data["prompt"],
+        )
+        response_serializer = ArenaBattleSnapshotSerializer(
+            self.service.build_battle_snapshot(battle)
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ArenaBattleDetailView(ServiceView[ArenaService], RetrieveAPIView):
+    """Return the full anonymous transcript for one arena battle."""
+
+    service_class = ArenaService
+    serializer_class = ArenaBattleSnapshotSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        battle = self.service.get_battle(kwargs["id"])
+        serializer = self.get_serializer(self.service.build_battle_snapshot(battle))
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
-    """Submit a vote for a completed battle and reveal model identities."""
+    """Submit a vote for a completed battle transcript and reveal model identities."""
 
     service_class = ArenaService
     serializer_class = BattleVoteRequestSerializer
@@ -57,34 +79,14 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
         serializer.is_valid(raise_exception=True)
 
         battle_id = kwargs["id"]
-        vote = self.service.submit_vote(
+        self.service.submit_vote(
             battle_id=battle_id,
             choice=serializer.validated_data["choice"],
             feedback=serializer.validated_data.get("feedback", ""),
         )
         battle = self.service.get_battle(battle_id)
-        responses = list(battle.responses.order_by("slot"))
-        winning_response = next((response for response in responses if response.slot == vote.choice), None)
-
         response_serializer = BattleVoteResponseSerializer(
-            {
-                "id": battle.id,
-                "choice": vote.choice,
-                "feedback": vote.feedback,
-                "winner_provider_name": winning_response.llm_model.provider.name if winning_response else None,
-                "winner_model_name": winning_response.llm_model.name if winning_response else None,
-                "responses": [
-                    {
-                        "slot": response.slot,
-                        "response_text": response.response_text,
-                        "model_name": response.llm_model.name,
-                        "provider_name": response.llm_model.provider.name,
-                        "provider_display_name": response.llm_model.provider.display_name,
-                        "is_winner": response.slot == vote.choice,
-                    }
-                    for response in battle.responses.order_by("slot")
-                ],
-            }
+            self.service.build_vote_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 

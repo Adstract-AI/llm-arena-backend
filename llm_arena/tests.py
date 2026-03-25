@@ -1,3 +1,242 @@
-from django.test import TestCase
+from unittest.mock import patch
 
-# Create your tests here.
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from llm_arena.models import ArenaBattle, ArenaTurn, BattleResponse, BattleVote, LLMModel, LLMProvider
+from llm_arena.services.arena_service import ArenaService
+from llm_arena.services.leaderboard_service import LeaderboardService
+
+
+class ArenaApiTests(APITestCase):
+    def setUp(self) -> None:
+        self.openai_provider = LLMProvider.objects.create(
+            name="openai",
+            display_name="OpenAI",
+            description="OpenAI models",
+            api_base_url="https://api.openai.com/v1",
+        )
+        self.anthropic_provider = LLMProvider.objects.create(
+            name="anthropic",
+            display_name="Anthropic",
+            description="Anthropic models",
+            api_base_url="https://api.anthropic.com/v1",
+        )
+
+        self.model_a = LLMModel.objects.create(
+            provider=self.openai_provider,
+            name="gpt-5.4",
+            external_model_id="gpt-5.4",
+            is_active=True,
+        )
+        self.model_b = LLMModel.objects.create(
+            provider=self.anthropic_provider,
+            name="claude-sonnet-4.6",
+            external_model_id="claude-sonnet-4-6",
+            is_active=True,
+        )
+
+        self.create_url = reverse("arena-battle-create")
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_create_battle_returns_full_transcript_snapshot(self, mock_select_random_models, mock_generate):
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+
+        response = self.client.post(
+            self.create_url,
+            {"prompt": "Explain friendship."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], ArenaBattle.BattleStatus.AWAITING_VOTE)
+        self.assertTrue(response.data["can_vote"])
+        self.assertEqual(len(response.data["turns"]), 1)
+        self.assertEqual(response.data["turns"][0]["turn_number"], 1)
+        self.assertEqual(response.data["turns"][0]["prompt"], "Explain friendship.")
+        self.assertEqual(
+            response.data["turns"][0]["responses"],
+            [
+                {"slot": "A", "response_text": "A1"},
+                {"slot": "B", "response_text": "B1"},
+            ],
+        )
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_continue_battle_uses_slot_specific_history(self, mock_select_random_models, mock_generate):
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+            self._response_details("A2"),
+            self._response_details("B2"),
+        ]
+
+        create_response = self.client.post(
+            self.create_url,
+            {"prompt": "Turn one prompt"},
+            format="json",
+        )
+        battle_id = create_response.data["id"]
+
+        continue_response = self.client.post(
+            reverse("arena-battle-turn-create", kwargs={"id": battle_id}),
+            {"prompt": "Turn two prompt"},
+            format="json",
+        )
+
+        self.assertEqual(continue_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(continue_response.data["turns"]), 2)
+        self.assertEqual(continue_response.data["turns"][1]["prompt"], "Turn two prompt")
+
+        model_a_history = mock_generate.call_args_list[2].kwargs["history_messages"]
+        model_b_history = mock_generate.call_args_list[3].kwargs["history_messages"]
+
+        self.assertEqual(
+            [(message.role, message.content) for message in model_a_history],
+            [("user", "Turn one prompt"), ("assistant", "A1")],
+        )
+        self.assertEqual(
+            [(message.role, message.content) for message in model_b_history],
+            [("user", "Turn one prompt"), ("assistant", "B1")],
+        )
+
+        detail_response = self.client.get(
+            reverse("arena-battle-detail", kwargs={"id": battle_id}),
+        )
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(detail_response.data["turns"]), 2)
+        self.assertTrue(detail_response.data["can_vote"])
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_vote_reveals_full_transcript_and_winner(self, mock_select_random_models, mock_generate):
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+
+        create_response = self.client.post(
+            self.create_url,
+            {"prompt": "Prompt for voting"},
+            format="json",
+        )
+        battle_id = create_response.data["id"]
+
+        vote_response = self.client.post(
+            reverse("arena-battle-vote-create", kwargs={"id": battle_id}),
+            {"choice": "A", "feedback": "A was better"},
+            format="json",
+        )
+
+        self.assertEqual(vote_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(vote_response.data["status"], ArenaBattle.BattleStatus.COMPLETED)
+        self.assertEqual(vote_response.data["winner_provider_name"], self.openai_provider.name)
+        self.assertEqual(vote_response.data["winner_model_name"], self.model_a.name)
+        self.assertEqual(len(vote_response.data["models"]), 2)
+        self.assertTrue(vote_response.data["models"][0]["is_winner"])
+        self.assertFalse(vote_response.data["models"][1]["is_winner"])
+        self.assertEqual(len(vote_response.data["turns"]), 1)
+        self.assertEqual(
+            vote_response.data["turns"][0]["responses"],
+            [
+                {"slot": "A", "response_text": "A1", "is_winner": True},
+                {"slot": "B", "response_text": "B1", "is_winner": False},
+            ],
+        )
+
+    def test_leaderboard_counts_one_match_per_multi_turn_battle(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.COMPLETED,
+        )
+        turn_one = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        turn_two = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=2,
+            prompt="Prompt 2",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn_one,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+            prompt_tokens=4,
+            completion_tokens=6,
+            total_tokens=10,
+            latency_ms=100,
+        )
+        BattleResponse.objects.create(
+            turn=turn_one,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+            prompt_tokens=3,
+            completion_tokens=5,
+            total_tokens=8,
+            latency_ms=120,
+        )
+        BattleResponse.objects.create(
+            turn=turn_two,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A2",
+            prompt_tokens=5,
+            completion_tokens=9,
+            total_tokens=14,
+            latency_ms=110,
+        )
+        BattleResponse.objects.create(
+            turn=turn_two,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B2",
+            prompt_tokens=4,
+            completion_tokens=8,
+            total_tokens=12,
+            latency_ms=130,
+        )
+        BattleVote.objects.create(
+            battle=battle,
+            choice=BattleVote.VoteChoice.A,
+            feedback="A wins",
+        )
+
+        leaderboard = LeaderboardService().get_leaderboard()
+        leaderboard_by_model_name = {
+            entry["model_name"]: entry
+            for entry in leaderboard
+        }
+
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["wins"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["losses"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["avg_total_tokens"], 12.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["avg_total_tokens"], 10.0)
+
+    @staticmethod
+    def _response_details(response_text: str) -> dict:
+        return {
+            "response_text": response_text,
+            "finish_reason": "stop",
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12,
+            "raw_metadata": {"source": "test"},
+        }

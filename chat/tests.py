@@ -57,7 +57,7 @@ class ChatApiTests(APITestCase):
         self.message_url = reverse("chat-message-create")
         self.models_url = reverse("chat-model-list")
 
-    @patch.object(ChatService.inference_service, "generate_response_details")
+    @patch.object(ChatService.inference_service, "generate_response_details_with_history")
     def test_first_message_creates_session_and_persists_messages(self, mock_generate_response_details):
         mock_generate_response_details.return_value = {
             "response_text": "Zdravo i od asistentot.",
@@ -92,7 +92,7 @@ class ChatApiTests(APITestCase):
         self.assertEqual(mock_generate_response_details.call_count, 1)
         self.assertEqual(mock_generate_response_details.call_args.kwargs["history_messages"], [])
 
-    @patch.object(ChatService.inference_service, "generate_response_details")
+    @patch.object(ChatService.inference_service, "generate_response_details_with_history")
     def test_follow_up_uses_last_twenty_messages_as_memory(self, mock_generate_response_details):
         mock_generate_response_details.return_value = {
             "response_text": "Follow-up response",

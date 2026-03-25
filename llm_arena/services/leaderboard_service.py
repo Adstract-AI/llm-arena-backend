@@ -2,8 +2,10 @@ from dataclasses import asdict, dataclass
 from math import pow
 from typing import Any
 
+from django.db.models import Prefetch
+
 from common.abstract import AbstractService
-from llm_arena.models import BattleVote, LLMModel
+from llm_arena.models import ArenaTurn, BattleResponse, BattleVote, LLMModel
 from llm_arena.services.llm_model_service import LLMModelService
 
 
@@ -27,7 +29,7 @@ class LeaderboardEntry:
 
 
 class LeaderboardService(AbstractService):
-    """Aggregate voted battle outcomes into leaderboard statistics for active models."""
+    """Aggregate voted multi-turn battle outcomes into leaderboard statistics."""
 
     DEFAULT_ELO_SCORE = 1000.0
     ELO_K_FACTOR = 32.0
@@ -48,33 +50,51 @@ class LeaderboardService(AbstractService):
         }
 
         votes = (
-            BattleVote.objects.select_related("battle")
-            .prefetch_related("battle__responses__llm_model__provider")
+            BattleVote.objects
+            .select_related("battle__model_a__provider", "battle__model_b__provider")
+            .prefetch_related(
+                Prefetch(
+                    "battle__turns",
+                    queryset=(
+                        ArenaTurn.objects.order_by("turn_number")
+                        .prefetch_related(
+                            Prefetch(
+                                "responses",
+                                queryset=BattleResponse.objects.order_by("slot"),
+                            )
+                        )
+                    ),
+                )
+            )
             .order_by("created_at")
         )
 
         for vote in votes:
-            responses = list(vote.battle.responses.all())
-            if len(responses) != 2:
-                continue
-
-            left_response = responses[0]
-            right_response = responses[1]
+            battle = vote.battle
             if (
-                left_response.llm_model_id not in stats_by_model_id
-                or right_response.llm_model_id not in stats_by_model_id
+                battle.model_a_id not in stats_by_model_id
+                or battle.model_b_id not in stats_by_model_id
             ):
                 continue
 
-            left_stats = stats_by_model_id[left_response.llm_model_id]
-            right_stats = stats_by_model_id[right_response.llm_model_id]
+            left_stats = stats_by_model_id[battle.model_a_id]
+            right_stats = stats_by_model_id[battle.model_b_id]
 
-            self._update_match_counts(left_stats, left_response)
-            self._update_match_counts(right_stats, right_response)
+            self._update_match_counts(left_stats)
+            self._update_match_counts(right_stats)
+
+            for turn in battle.turns.all():
+                responses_by_slot = {
+                    response.slot: response
+                    for response in turn.responses.all()
+                }
+                if BattleResponse.ResponseSlot.A in responses_by_slot:
+                    self._update_response_metrics(left_stats, responses_by_slot[BattleResponse.ResponseSlot.A])
+                if BattleResponse.ResponseSlot.B in responses_by_slot:
+                    self._update_response_metrics(right_stats, responses_by_slot[BattleResponse.ResponseSlot.B])
+
             self._apply_vote_result(
                 vote_choice=vote.choice,
-                left_response=left_response,
-                right_response=right_response,
                 left_stats=left_stats,
                 right_stats=right_stats,
             )
@@ -161,16 +181,25 @@ class LeaderboardService(AbstractService):
             "response_length_count": 0,
         }
 
-    def _update_match_counts(self, stats: dict[str, Any], response) -> None:
+    @staticmethod
+    def _update_match_counts(stats: dict[str, Any]) -> None:
         """
-        Update aggregate counters for a single persisted response.
+        Increment the match counter for one battle result.
+
+        Args:
+            stats: Mutable model statistics accumulator.
+        """
+        stats["matches"] += 1
+
+    @staticmethod
+    def _update_response_metrics(stats: dict[str, Any], response: BattleResponse) -> None:
+        """
+        Update aggregate token, latency, and length counters for one response row.
 
         Args:
             stats: Mutable model statistics accumulator.
             response: Persisted battle response row.
         """
-        stats["matches"] += 1
-
         if response.prompt_tokens is not None:
             stats["prompt_tokens_sum"] += response.prompt_tokens
             stats["prompt_tokens_count"] += 1
@@ -192,8 +221,6 @@ class LeaderboardService(AbstractService):
     def _apply_vote_result(
         self,
         vote_choice: str,
-        left_response,
-        right_response,
         left_stats: dict[str, Any],
         right_stats: dict[str, Any],
     ) -> None:
@@ -202,17 +229,15 @@ class LeaderboardService(AbstractService):
 
         Args:
             vote_choice: Stored vote choice for the battle.
-            left_response: First response in the battle.
-            right_response: Second response in the battle.
-            left_stats: Mutable stats accumulator for the first model.
-            right_stats: Mutable stats accumulator for the second model.
+            left_stats: Mutable stats accumulator for the A-slot model.
+            right_stats: Mutable stats accumulator for the B-slot model.
         """
         if vote_choice == BattleVote.VoteChoice.TIE:
             left_stats["ties"] += 1
             right_stats["ties"] += 1
             left_score = 0.5
             right_score = 0.5
-        elif vote_choice == left_response.slot:
+        elif vote_choice == BattleResponse.ResponseSlot.A:
             left_stats["wins"] += 1
             right_stats["losses"] += 1
             left_score = 1.0
@@ -258,44 +283,27 @@ class LeaderboardService(AbstractService):
         losses = stats["losses"]
         ties = stats["ties"]
         decisive_matches = wins + losses
-        model = stats["model"]
+
+        def average(sum_key: str, count_key: str) -> float | None:
+            count = stats[count_key]
+            if count == 0:
+                return None
+            return stats[sum_key] / count
 
         return LeaderboardEntry(
-            model_name=model.name,
-            provider_name=model.provider.name,
-            provider_display_name=model.provider.display_name,
+            model_name=stats["model"].name,
+            provider_name=stats["model"].provider.name,
+            provider_display_name=stats["model"].provider.display_name,
             matches=matches,
             wins=wins,
             losses=losses,
             ties=ties,
-            win_rate=round((wins / matches), 4) if matches else 0.0,
-            non_tie_win_rate=round((wins / decisive_matches), 4) if decisive_matches else None,
-            elo_score=round(stats["elo_score"], 2),
-            avg_prompt_tokens=self._compute_average(stats["prompt_tokens_sum"], stats["prompt_tokens_count"]),
-            avg_completion_tokens=self._compute_average(
-                stats["completion_tokens_sum"],
-                stats["completion_tokens_count"],
-            ),
-            avg_total_tokens=self._compute_average(stats["total_tokens_sum"], stats["total_tokens_count"]),
-            avg_latency_ms=self._compute_average(stats["latency_ms_sum"], stats["latency_ms_count"]),
-            avg_response_length_chars=self._compute_average(
-                stats["response_length_sum"],
-                stats["response_length_count"],
-            ),
+            win_rate=(wins / matches) if matches else 0.0,
+            non_tie_win_rate=(wins / decisive_matches) if decisive_matches else None,
+            elo_score=stats["elo_score"],
+            avg_prompt_tokens=average("prompt_tokens_sum", "prompt_tokens_count"),
+            avg_completion_tokens=average("completion_tokens_sum", "completion_tokens_count"),
+            avg_total_tokens=average("total_tokens_sum", "total_tokens_count"),
+            avg_latency_ms=average("latency_ms_sum", "latency_ms_count"),
+            avg_response_length_chars=average("response_length_sum", "response_length_count"),
         )
-
-    @staticmethod
-    def _compute_average(total: int, count: int) -> float | None:
-        """
-        Compute a rounded average or None when no observations exist.
-
-        Args:
-            total: Sum of observed values.
-            count: Number of observations.
-
-        Returns:
-            float | None: Rounded average when available, otherwise None.
-        """
-        if count == 0:
-            return None
-        return round(total / count, 2)

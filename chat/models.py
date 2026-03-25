@@ -70,4 +70,4 @@ class ChatMessage(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.session_id} [{self.role}]"
+        return str(self.id)
