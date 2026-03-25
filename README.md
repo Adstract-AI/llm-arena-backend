@@ -35,6 +35,12 @@ This starts:
 
 The backend container waits for Postgres and runs setup automatically on startup.
 
+That startup flow also:
+- seeds the database with the required initial data
+- creates a default superuser with username `admin` and password `admin`
+
+After the first cold start, you can disable this automatic setup behavior by setting `AUTO_START_SETUP=false`.
+
 ### Environment
 Use `.env.example` as the template and create a local `.env` file.
 
