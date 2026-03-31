@@ -4,6 +4,42 @@ from common.models import TimestampedModel
 from llm_arena.models import ArenaBattle
 
 
+class ParameterSamplingSpec(TimestampedModel):
+    """Store admin-configurable sampling settings for one experimental parameter."""
+
+    class ParameterName(models.TextChoices):
+        TEMPERATURE = "temperature", "Temperature"
+        TOP_P = "top_p", "Top P"
+        TOP_K = "top_k", "Top K"
+        FREQUENCY_PENALTY = "frequency_penalty", "Frequency Penalty"
+        PRESENCE_PENALTY = "presence_penalty", "Presence Penalty"
+
+    class ValueType(models.TextChoices):
+        FLOAT = "float", "Float"
+        INTEGER = "int", "Integer"
+
+    parameter_name = models.CharField(
+        max_length=32,
+        choices=ParameterName.choices,
+        unique=True,
+    )
+    value_type = models.CharField(max_length=16, choices=ValueType.choices)
+    minimum_value = models.DecimalField(max_digits=8, decimal_places=4)
+    maximum_value = models.DecimalField(max_digits=8, decimal_places=4)
+    uniform_min = models.DecimalField(max_digits=8, decimal_places=4)
+    uniform_max = models.DecimalField(max_digits=8, decimal_places=4)
+    normal_mean = models.DecimalField(max_digits=8, decimal_places=4)
+    normal_std = models.DecimalField(max_digits=8, decimal_places=4)
+    beta_alpha = models.DecimalField(max_digits=8, decimal_places=4)
+    beta_beta = models.DecimalField(max_digits=8, decimal_places=4)
+
+    class Meta:
+        ordering = ["parameter_name"]
+
+    def __str__(self) -> str:
+        return self.parameter_name
+
+
 class ExperimentConfig(TimestampedModel):
     """Store the sampled runtime generation configuration for one arena battle."""
 

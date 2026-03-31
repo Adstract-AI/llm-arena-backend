@@ -18,7 +18,26 @@ class ModelSeed:
     is_active: bool = False
     is_fine_tuned: bool = False
     is_macedonian_optimized: bool = False
+    supports_temperature: bool = False
+    supports_top_p: bool = False
+    supports_top_k: bool = False
+    supports_frequency_penalty: bool = False
+    supports_presence_penalty: bool = False
     configuration: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ParameterSamplingSpecSeed:
+    parameter_name: str
+    value_type: str
+    minimum_value: str
+    maximum_value: str
+    uniform_min: str
+    uniform_max: str
+    normal_mean: str
+    normal_std: str
+    beta_alpha: str
+    beta_beta: str
 
 
 PROVIDER_SEEDS = (
@@ -55,6 +74,10 @@ MODEL_SEEDS = (
         name="gpt-5.4",
         external_model_id="gpt-5.4",
         description="Frontier GPT-5.4 model for agentic, coding, and professional workflows.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-5.4",
@@ -65,6 +88,10 @@ MODEL_SEEDS = (
         name="gpt-5.4-mini",
         external_model_id="gpt-5.4-mini",
         description="Strong GPT-5.4-class mini model for coding, computer use, and subagent tasks.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-5.4",
@@ -75,6 +102,10 @@ MODEL_SEEDS = (
         name="gpt-5.4-nano",
         external_model_id="gpt-5.4-nano",
         description="Cheapest GPT-5.4-class model for simple, high-volume workloads.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-5.4",
@@ -85,6 +116,10 @@ MODEL_SEEDS = (
         name="gpt-4.1",
         external_model_id="gpt-4.1",
         description="Widely used high-capability non-reasoning OpenAI model.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-4.1",
@@ -95,6 +130,10 @@ MODEL_SEEDS = (
         name="gpt-4.1-mini",
         external_model_id="gpt-4.1-mini",
         description="Smaller GPT-4.1 variant optimized for lower cost and latency.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-4.1",
@@ -105,6 +144,10 @@ MODEL_SEEDS = (
         name="gpt-4.1-nano",
         external_model_id="gpt-4.1-nano",
         description="Fastest GPT-4.1-class variant for lightweight, high-volume tasks.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_frequency_penalty=True,
+        supports_presence_penalty=True,
         configuration={
             "source": "official_openai_api",
             "family": "gpt-4.1",
@@ -115,6 +158,9 @@ MODEL_SEEDS = (
         name="claude-opus-4.6",
         external_model_id="claude-opus-4-6",
         description="Anthropic's most capable Claude model for agents, coding, and high-end reasoning.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "alias": "claude-opus-4-6",
             "source": "official_anthropic_api",
@@ -126,6 +172,9 @@ MODEL_SEEDS = (
         name="claude-sonnet-4.6",
         external_model_id="claude-sonnet-4-6",
         description="Claude model with the best combination of speed and intelligence.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "alias": "claude-sonnet-4-6",
             "source": "official_anthropic_api",
@@ -137,6 +186,9 @@ MODEL_SEEDS = (
         name="claude-haiku-4.5",
         external_model_id="claude-haiku-4-5-20251001",
         description="Fast Claude model with near-frontier intelligence.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "alias": "claude-haiku-4-5",
             "source": "official_anthropic_api",
@@ -148,6 +200,9 @@ MODEL_SEEDS = (
         name="gemini-3.1-pro-preview",
         external_model_id="gemini-3.1-pro-preview",
         description="Refined Gemini Pro preview model for stronger thinking, token efficiency, and software engineering workflows.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "source": "official_google_gemini_api",
             "family": "gemini-3.1",
@@ -159,6 +214,9 @@ MODEL_SEEDS = (
         name="gemini-3-flash-preview",
         external_model_id="gemini-3-flash-preview",
         description="Google's most powerful agentic and multimodal Flash preview model.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "source": "official_google_gemini_api",
             "family": "gemini-3",
@@ -170,6 +228,9 @@ MODEL_SEEDS = (
         name="gemini-3.1-flash-lite-preview",
         external_model_id="gemini-3.1-flash-lite-preview",
         description="Google's most cost-efficient Gemini preview model for high-frequency lightweight tasks.",
+        supports_temperature=True,
+        supports_top_p=True,
+        supports_top_k=True,
         configuration={
             "source": "official_google_gemini_api",
             "family": "gemini-3.1",
@@ -227,5 +288,68 @@ MODEL_SEEDS = (
             "source": "official_finki_endpoint",
             "family": "vezilka",
         },
+    ),
+)
+
+PARAMETER_SAMPLING_SPEC_SEEDS = (
+    ParameterSamplingSpecSeed(
+        parameter_name="temperature",
+        value_type="float",
+        minimum_value="0.0000",
+        maximum_value="2.0000",
+        uniform_min="0.2000",
+        uniform_max="1.2000",
+        normal_mean="0.8000",
+        normal_std="0.2500",
+        beta_alpha="2.0000",
+        beta_beta="2.0000",
+    ),
+    ParameterSamplingSpecSeed(
+        parameter_name="top_p",
+        value_type="float",
+        minimum_value="0.1000",
+        maximum_value="1.0000",
+        uniform_min="0.7000",
+        uniform_max="1.0000",
+        normal_mean="0.9000",
+        normal_std="0.0800",
+        beta_alpha="5.0000",
+        beta_beta="2.0000",
+    ),
+    ParameterSamplingSpecSeed(
+        parameter_name="top_k",
+        value_type="int",
+        minimum_value="1.0000",
+        maximum_value="100.0000",
+        uniform_min="20.0000",
+        uniform_max="100.0000",
+        normal_mean="50.0000",
+        normal_std="20.0000",
+        beta_alpha="2.0000",
+        beta_beta="5.0000",
+    ),
+    ParameterSamplingSpecSeed(
+        parameter_name="frequency_penalty",
+        value_type="float",
+        minimum_value="-2.0000",
+        maximum_value="2.0000",
+        uniform_min="-0.5000",
+        uniform_max="1.0000",
+        normal_mean="0.2500",
+        normal_std="0.5000",
+        beta_alpha="2.0000",
+        beta_beta="2.0000",
+    ),
+    ParameterSamplingSpecSeed(
+        parameter_name="presence_penalty",
+        value_type="float",
+        minimum_value="-2.0000",
+        maximum_value="2.0000",
+        uniform_min="-0.5000",
+        uniform_max="1.0000",
+        normal_mean="0.2500",
+        normal_std="0.5000",
+        beta_alpha="2.0000",
+        beta_beta="2.0000",
     ),
 )

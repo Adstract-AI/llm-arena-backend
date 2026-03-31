@@ -26,3 +26,10 @@ class ExperimentalArenaSamplingException(ExperimentalArenaException):
     default_detail = "Failed to sample valid experimental values for this battle."
     default_code = "experimental_arena_sampling_failed"
 
+
+class ExperimentalArenaMissingSamplingSpecException(ExperimentalArenaException):
+    """Raised when experimental sampling configuration is missing from the database."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    default_detail = "Experimental parameter sampling configuration is missing."
+    default_code = "experimental_arena_missing_sampling_spec"

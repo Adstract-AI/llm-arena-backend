@@ -124,8 +124,23 @@ class LLMModelAdmin(admin.ModelAdmin):
         "is_active",
         "is_fine_tuned",
         "is_macedonian_optimized",
+        "supports_temperature",
+        "supports_top_p",
+        "supports_top_k",
+        "supports_frequency_penalty",
+        "supports_presence_penalty",
     )
-    list_filter = ("provider", "is_active", "is_fine_tuned", "is_macedonian_optimized")
+    list_filter = (
+        "provider",
+        "is_active",
+        "is_fine_tuned",
+        "is_macedonian_optimized",
+        "supports_temperature",
+        "supports_top_p",
+        "supports_top_k",
+        "supports_frequency_penalty",
+        "supports_presence_penalty",
+    )
     search_fields = ("name", "external_model_id", "description", "provider__name")
     actions = (make_models_active, make_models_inactive)
 

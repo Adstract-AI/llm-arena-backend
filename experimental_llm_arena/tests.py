@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from experimental_llm_arena.models import ExperimentConfig
+from experimental_llm_arena.models import ExperimentConfig, ParameterSamplingSpec
 from experimental_llm_arena.services.experimental_arena_service import ExperimentalArenaService
 from llm_arena.models import ArenaBattle, LLMModel, LLMProvider
 from llm_arena.services.arena_service import ArenaService
@@ -37,18 +37,85 @@ class ExperimentalArenaApiTests(APITestCase):
             name="gpt-5.4",
             external_model_id="gpt-5.4",
             is_active=True,
+            supports_temperature=True,
+            supports_top_p=True,
+            supports_frequency_penalty=True,
+            supports_presence_penalty=True,
         )
         self.anthropic_model = LLMModel.objects.create(
             provider=self.anthropic_provider,
             name="claude-sonnet-4.6",
             external_model_id="claude-sonnet-4-6",
             is_active=True,
+            supports_temperature=True,
+            supports_top_p=True,
+            supports_top_k=True,
         )
         self.finki_model = LLMModel.objects.create(
             provider=self.finki_provider,
             name="vezilka-4b-it-fp16",
             external_model_id="finki_ukim/vezilka:4b-it-fp16",
             is_active=True,
+        )
+        self.temperature_spec = ParameterSamplingSpec.objects.create(
+            parameter_name=ParameterSamplingSpec.ParameterName.TEMPERATURE,
+            value_type=ParameterSamplingSpec.ValueType.FLOAT,
+            minimum_value=Decimal("0.0000"),
+            maximum_value=Decimal("2.0000"),
+            uniform_min=Decimal("0.2000"),
+            uniform_max=Decimal("1.2000"),
+            normal_mean=Decimal("0.8000"),
+            normal_std=Decimal("0.2500"),
+            beta_alpha=Decimal("2.0000"),
+            beta_beta=Decimal("2.0000"),
+        )
+        ParameterSamplingSpec.objects.create(
+            parameter_name=ParameterSamplingSpec.ParameterName.TOP_P,
+            value_type=ParameterSamplingSpec.ValueType.FLOAT,
+            minimum_value=Decimal("0.1000"),
+            maximum_value=Decimal("1.0000"),
+            uniform_min=Decimal("0.7000"),
+            uniform_max=Decimal("1.0000"),
+            normal_mean=Decimal("0.9000"),
+            normal_std=Decimal("0.0800"),
+            beta_alpha=Decimal("5.0000"),
+            beta_beta=Decimal("2.0000"),
+        )
+        ParameterSamplingSpec.objects.create(
+            parameter_name=ParameterSamplingSpec.ParameterName.TOP_K,
+            value_type=ParameterSamplingSpec.ValueType.INTEGER,
+            minimum_value=Decimal("1.0000"),
+            maximum_value=Decimal("100.0000"),
+            uniform_min=Decimal("20.0000"),
+            uniform_max=Decimal("100.0000"),
+            normal_mean=Decimal("50.0000"),
+            normal_std=Decimal("20.0000"),
+            beta_alpha=Decimal("2.0000"),
+            beta_beta=Decimal("5.0000"),
+        )
+        ParameterSamplingSpec.objects.create(
+            parameter_name=ParameterSamplingSpec.ParameterName.FREQUENCY_PENALTY,
+            value_type=ParameterSamplingSpec.ValueType.FLOAT,
+            minimum_value=Decimal("-2.0000"),
+            maximum_value=Decimal("2.0000"),
+            uniform_min=Decimal("-0.5000"),
+            uniform_max=Decimal("1.0000"),
+            normal_mean=Decimal("0.2500"),
+            normal_std=Decimal("0.5000"),
+            beta_alpha=Decimal("2.0000"),
+            beta_beta=Decimal("2.0000"),
+        )
+        ParameterSamplingSpec.objects.create(
+            parameter_name=ParameterSamplingSpec.ParameterName.PRESENCE_PENALTY,
+            value_type=ParameterSamplingSpec.ValueType.FLOAT,
+            minimum_value=Decimal("-2.0000"),
+            maximum_value=Decimal("2.0000"),
+            uniform_min=Decimal("-0.5000"),
+            uniform_max=Decimal("1.0000"),
+            normal_mean=Decimal("0.2500"),
+            normal_std=Decimal("0.5000"),
+            beta_alpha=Decimal("2.0000"),
+            beta_beta=Decimal("2.0000"),
         )
 
         self.create_url = reverse("experimental-arena-battle-create")
@@ -208,6 +275,36 @@ class ExperimentalArenaApiTests(APITestCase):
                 "slot_b_value": 0.7,
             },
         )
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    def test_experimental_battle_filters_models_by_support_flags(self, mock_generate) -> None:
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+        self.openai_model.supports_temperature = False
+        self.openai_model.save(update_fields=["supports_temperature", "updated_at"])
+        self.anthropic_model.supports_temperature = False
+        self.anthropic_model.save(update_fields=["supports_temperature", "updated_at"])
+
+        response = self.client.post(
+            self.create_url,
+            {
+                "prompt": "Explain friendship.",
+                "model_mode": "different_models",
+                "share_values_across_models": False,
+                "parameters": {
+                    "temperature": {"enabled": True, "distribution": "normal"},
+                    "top_p": {"enabled": False, "distribution": None},
+                    "top_k": {"enabled": False, "distribution": None},
+                    "frequency_penalty": {"enabled": False, "distribution": None},
+                    "presence_penalty": {"enabled": False, "distribution": None},
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     @staticmethod
     def _response_details(response_text: str) -> dict:

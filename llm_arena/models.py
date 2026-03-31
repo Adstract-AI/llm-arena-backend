@@ -34,6 +34,11 @@ class LLMModel(TimestampedModel):
     is_active = models.BooleanField(default=True)
     is_fine_tuned = models.BooleanField(default=False)
     is_macedonian_optimized = models.BooleanField(default=False)
+    supports_temperature = models.BooleanField(default=False)
+    supports_top_p = models.BooleanField(default=False)
+    supports_top_k = models.BooleanField(default=False)
+    supports_frequency_penalty = models.BooleanField(default=False)
+    supports_presence_penalty = models.BooleanField(default=False)
     configuration = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -48,6 +53,11 @@ class LLMModel(TimestampedModel):
             models.Index(fields=["is_active"]),
             models.Index(fields=["is_fine_tuned"]),
             models.Index(fields=["is_macedonian_optimized"]),
+            models.Index(fields=["supports_temperature"]),
+            models.Index(fields=["supports_top_p"]),
+            models.Index(fields=["supports_top_k"]),
+            models.Index(fields=["supports_frequency_penalty"]),
+            models.Index(fields=["supports_presence_penalty"]),
         ]
 
     def __str__(self) -> str:

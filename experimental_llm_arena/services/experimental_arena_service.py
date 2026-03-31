@@ -1,36 +1,19 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from common.abstract import AbstractService
 from experimental_llm_arena.exceptions import (
     ExperimentalArenaIncompatibleModelsException,
+    ExperimentalArenaMissingSamplingSpecException,
     ExperimentalArenaSamplingException,
 )
-from experimental_llm_arena.models import ExperimentConfig
+from experimental_llm_arena.models import ExperimentConfig, ParameterSamplingSpec
 from llm_arena.models import ArenaBattle, LLMModel
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.llm_model_service import LLMModelService
-
-
-@dataclass(frozen=True)
-class ParameterSamplingSpec:
-    """Describe one experimental parameter and how to sample it."""
-
-    name: str
-    supported_providers: frozenset[str]
-    minimum: float
-    maximum: float
-    value_type: str
-    uniform_min: float
-    uniform_max: float
-    normal_mean: float
-    normal_std: float
-    beta_alpha: float
-    beta_beta: float
 
 
 class ExperimentalArenaService(AbstractService):
@@ -41,73 +24,12 @@ class ExperimentalArenaService(AbstractService):
 
     SAME_MODEL_MAX_RESAMPLES = 25
     FLOAT_QUANTIZER = Decimal("0.0001")
-
-    PARAMETER_SPECS: dict[str, ParameterSamplingSpec] = {
-        "temperature": ParameterSamplingSpec(
-            name="temperature",
-            supported_providers=frozenset({"openai", "anthropic", "google"}),
-            minimum=0.0,
-            maximum=2.0,
-            value_type="float",
-            uniform_min=0.2,
-            uniform_max=1.2,
-            normal_mean=0.8,
-            normal_std=0.25,
-            beta_alpha=2.0,
-            beta_beta=2.0,
-        ),
-        "top_p": ParameterSamplingSpec(
-            name="top_p",
-            supported_providers=frozenset({"openai", "anthropic", "google"}),
-            minimum=0.1,
-            maximum=1.0,
-            value_type="float",
-            uniform_min=0.7,
-            uniform_max=1.0,
-            normal_mean=0.9,
-            normal_std=0.08,
-            beta_alpha=5.0,
-            beta_beta=2.0,
-        ),
-        "top_k": ParameterSamplingSpec(
-            name="top_k",
-            supported_providers=frozenset({"anthropic", "google"}),
-            minimum=1.0,
-            maximum=100.0,
-            value_type="int",
-            uniform_min=20.0,
-            uniform_max=100.0,
-            normal_mean=50.0,
-            normal_std=20.0,
-            beta_alpha=2.0,
-            beta_beta=5.0,
-        ),
-        "frequency_penalty": ParameterSamplingSpec(
-            name="frequency_penalty",
-            supported_providers=frozenset({"openai"}),
-            minimum=-2.0,
-            maximum=2.0,
-            value_type="float",
-            uniform_min=-0.5,
-            uniform_max=1.0,
-            normal_mean=0.25,
-            normal_std=0.5,
-            beta_alpha=2.0,
-            beta_beta=2.0,
-        ),
-        "presence_penalty": ParameterSamplingSpec(
-            name="presence_penalty",
-            supported_providers=frozenset({"openai"}),
-            minimum=-2.0,
-            maximum=2.0,
-            value_type="float",
-            uniform_min=-0.5,
-            uniform_max=1.0,
-            normal_mean=0.25,
-            normal_std=0.5,
-            beta_alpha=2.0,
-            beta_beta=2.0,
-        ),
+    PARAMETER_SUPPORT_FIELD_MAP = {
+        ParameterSamplingSpec.ParameterName.TEMPERATURE: "supports_temperature",
+        ParameterSamplingSpec.ParameterName.TOP_P: "supports_top_p",
+        ParameterSamplingSpec.ParameterName.TOP_K: "supports_top_k",
+        ParameterSamplingSpec.ParameterName.FREQUENCY_PENALTY: "supports_frequency_penalty",
+        ParameterSamplingSpec.ParameterName.PRESENCE_PENALTY: "supports_presence_penalty",
     }
 
     def create_battle(
@@ -131,9 +53,11 @@ class ExperimentalArenaService(AbstractService):
 
         Raises:
             ExperimentalArenaIncompatibleModelsException: If no compatible active model pool exists.
+            ExperimentalArenaMissingSamplingSpecException: If required sampling specs are missing.
             ExperimentalArenaSamplingException: If same-model slot sampling cannot create a real comparison.
         """
         enabled_parameter_names = self._get_enabled_parameter_names(parameters)
+        sampling_specs = self._get_sampling_specs(enabled_parameter_names)
         compatible_models = self._get_compatible_models(enabled_parameter_names)
         model_a, model_b = self._select_models(
             compatible_models=compatible_models,
@@ -143,6 +67,7 @@ class ExperimentalArenaService(AbstractService):
             model_mode=model_mode,
             share_values_across_models=share_values_across_models,
             parameters=parameters,
+            sampling_specs=sampling_specs,
         )
 
         return self.arena_service.create_battle_with_models(
@@ -168,6 +93,41 @@ class ExperimentalArenaService(AbstractService):
             if parameter_config["enabled"]
         ]
 
+    def _get_sampling_specs(
+        self,
+        enabled_parameter_names: list[str],
+    ) -> dict[str, ParameterSamplingSpec]:
+        """
+        Load the sampling spec rows required for the enabled experimental parameters.
+
+        Args:
+            enabled_parameter_names: Enabled experimental parameter names.
+
+        Returns:
+            dict[str, ParameterSamplingSpec]: Sampling specs keyed by parameter name.
+
+        Raises:
+            ExperimentalArenaMissingSamplingSpecException: If any enabled parameter lacks a DB spec row.
+        """
+        sampling_specs = {
+            spec.parameter_name: spec
+            for spec in ParameterSamplingSpec.objects.filter(
+                parameter_name__in=enabled_parameter_names,
+            )
+        }
+        missing_parameter_names = sorted(
+            set(enabled_parameter_names) - set(sampling_specs.keys())
+        )
+        if missing_parameter_names:
+            raise ExperimentalArenaMissingSamplingSpecException(
+                detail=(
+                    "Missing sampling specs for parameter(s): "
+                    + ", ".join(missing_parameter_names)
+                    + "."
+                )
+            )
+        return sampling_specs
+
     def _get_compatible_models(self, enabled_parameter_names: list[str]) -> list[LLMModel]:
         """
         Filter active models down to those supporting all requested parameters.
@@ -186,19 +146,14 @@ class ExperimentalArenaService(AbstractService):
                 detail="At least one experimental parameter must be enabled."
             )
 
-        compatible_provider_names = set(
-            self.PARAMETER_SPECS[enabled_parameter_names[0]].supported_providers
-        )
-        for enabled_parameter_name in enabled_parameter_names[1:]:
-            compatible_provider_names &= self.PARAMETER_SPECS[
-                enabled_parameter_name
-            ].supported_providers
+        compatible_models = []
+        for model in self.llm_model_service.get_active_models():
+            if all(
+                getattr(model, self.PARAMETER_SUPPORT_FIELD_MAP[parameter_name])
+                for parameter_name in enabled_parameter_names
+            ):
+                compatible_models.append(model)
 
-        compatible_models = [
-            model
-            for model in self.llm_model_service.get_active_models()
-            if model.provider_name in compatible_provider_names
-        ]
         if not compatible_models:
             raise ExperimentalArenaIncompatibleModelsException()
         return compatible_models
@@ -238,6 +193,7 @@ class ExperimentalArenaService(AbstractService):
         model_mode: str,
         share_values_across_models: bool | None,
         parameters: dict[str, dict[str, Any]],
+        sampling_specs: dict[str, ParameterSamplingSpec],
     ) -> dict[str, Any]:
         """
         Build the persisted experiment configuration field payload for one battle.
@@ -246,6 +202,7 @@ class ExperimentalArenaService(AbstractService):
             model_mode: Same-model or different-model experiment mode.
             share_values_across_models: Whether different-model slots reuse sampled values.
             parameters: Request parameter config keyed by parameter name.
+            sampling_specs: Loaded sampling specs keyed by parameter name.
 
         Returns:
             dict[str, Any]: Model fields for ExperimentConfig creation.
@@ -259,10 +216,14 @@ class ExperimentalArenaService(AbstractService):
         }
 
         if model_mode == ExperimentConfig.ModelMode.SAME_MODEL:
-            sampled_values = self._sample_same_model_values(parameters)
+            sampled_values = self._sample_same_model_values(
+                parameters=parameters,
+                sampling_specs=sampling_specs,
+            )
         else:
             sampled_values = self._sample_different_model_values(
                 parameters=parameters,
+                sampling_specs=sampling_specs,
                 share_values_across_models=bool(share_values_across_models),
             )
 
@@ -274,12 +235,17 @@ class ExperimentalArenaService(AbstractService):
 
         return fields
 
-    def _sample_same_model_values(self, parameters: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    def _sample_same_model_values(
+        self,
+        parameters: dict[str, dict[str, Any]],
+        sampling_specs: dict[str, ParameterSamplingSpec],
+    ) -> dict[str, dict[str, Any]]:
         """
         Sample two slot configurations for a same-model experiment until they differ.
 
         Args:
             parameters: Request parameter config keyed by parameter name.
+            sampling_specs: Loaded sampling specs keyed by parameter name.
 
         Returns:
             dict[str, dict[str, Any]]: Persistable per-parameter slot values.
@@ -290,6 +256,7 @@ class ExperimentalArenaService(AbstractService):
         for _ in range(self.SAME_MODEL_MAX_RESAMPLES):
             sampled_values = self._sample_different_model_values(
                 parameters=parameters,
+                sampling_specs=sampling_specs,
                 share_values_across_models=False,
             )
             if self._has_any_slot_difference(sampled_values, parameters):
@@ -300,6 +267,7 @@ class ExperimentalArenaService(AbstractService):
     def _sample_different_model_values(
         self,
         parameters: dict[str, dict[str, Any]],
+        sampling_specs: dict[str, ParameterSamplingSpec],
         share_values_across_models: bool,
     ) -> dict[str, dict[str, Any]]:
         """
@@ -307,6 +275,7 @@ class ExperimentalArenaService(AbstractService):
 
         Args:
             parameters: Request parameter config keyed by parameter name.
+            sampling_specs: Loaded sampling specs keyed by parameter name.
             share_values_across_models: Whether both slots should reuse the same sampled value.
 
         Returns:
@@ -322,12 +291,13 @@ class ExperimentalArenaService(AbstractService):
                 }
                 continue
 
+            spec = sampling_specs[parameter_name]
             distribution = parameter_config["distribution"]
-            value_a = self._sample_parameter_value(parameter_name, distribution)
+            value_a = self._sample_parameter_value(spec=spec, distribution=distribution)
             value_b = (
                 value_a
                 if share_values_across_models
-                else self._sample_parameter_value(parameter_name, distribution)
+                else self._sample_parameter_value(spec=spec, distribution=distribution)
             )
             sampled_values[parameter_name] = {
                 "value_a": value_a,
@@ -336,29 +306,35 @@ class ExperimentalArenaService(AbstractService):
 
         return sampled_values
 
-    def _sample_parameter_value(self, parameter_name: str, distribution: str) -> Decimal | int:
+    def _sample_parameter_value(
+        self,
+        spec: ParameterSamplingSpec,
+        distribution: str,
+    ) -> Decimal | int:
         """
         Sample one parameter value according to the requested distribution family.
 
         Args:
-            parameter_name: Parameter name to sample.
+            spec: Sampling spec row for the requested parameter.
             distribution: Distribution family selected by the request.
 
         Returns:
             Decimal | int: Normalized sampled value ready for persistence.
         """
-        spec = self.PARAMETER_SPECS[parameter_name]
+        minimum_value = float(spec.minimum_value)
+        maximum_value = float(spec.maximum_value)
         raw_value: float
-        if distribution == "uniform":
-            raw_value = random.uniform(spec.uniform_min, spec.uniform_max)
-        elif distribution == "normal":
-            raw_value = random.gauss(spec.normal_mean, spec.normal_std)
-        else:
-            beta_value = random.betavariate(spec.beta_alpha, spec.beta_beta)
-            raw_value = spec.minimum + (beta_value * (spec.maximum - spec.minimum))
 
-        clipped_value = min(max(raw_value, spec.minimum), spec.maximum)
-        if spec.value_type == "int":
+        if distribution == ExperimentConfig.DistributionType.UNIFORM:
+            raw_value = random.uniform(float(spec.uniform_min), float(spec.uniform_max))
+        elif distribution == ExperimentConfig.DistributionType.NORMAL:
+            raw_value = random.gauss(float(spec.normal_mean), float(spec.normal_std))
+        else:
+            beta_value = random.betavariate(float(spec.beta_alpha), float(spec.beta_beta))
+            raw_value = minimum_value + (beta_value * (maximum_value - minimum_value))
+
+        clipped_value = min(max(raw_value, minimum_value), maximum_value)
+        if spec.value_type == ParameterSamplingSpec.ValueType.INTEGER:
             return int(round(clipped_value))
 
         return Decimal(str(clipped_value)).quantize(self.FLOAT_QUANTIZER)
