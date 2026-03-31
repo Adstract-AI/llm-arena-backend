@@ -22,6 +22,7 @@ class ArenaInferenceService(AbstractService):
             model: LLMModel,
             prompt: str,
             system_prompt: str | None = None,
+            generation_config: dict[str, int | float] | None = None,
     ) -> dict[str, Any]:
         """
         Generate a response and normalized metadata for a catalog model.
@@ -30,6 +31,7 @@ class ArenaInferenceService(AbstractService):
             model: Catalog model instance to invoke.
             prompt: The user prompt to send to the model.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -44,6 +46,7 @@ class ArenaInferenceService(AbstractService):
             prompt=prompt,
             history_messages=None,
             system_prompt=system_prompt,
+            generation_config=generation_config,
         )
 
     def generate_response_details_with_history(
@@ -52,6 +55,7 @@ class ArenaInferenceService(AbstractService):
             history_messages: Sequence[Any],
             prompt: str,
             system_prompt: str | None = None,
+            generation_config: dict[str, int | float] | None = None,
     ) -> dict[str, Any]:
         """
         Generate a response using persisted conversation history plus the current prompt.
@@ -61,6 +65,7 @@ class ArenaInferenceService(AbstractService):
             history_messages: Persisted prior messages used as chat memory.
             prompt: The user prompt to send to the model.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -73,6 +78,7 @@ class ArenaInferenceService(AbstractService):
             prompt=prompt,
             history_messages=history_messages,
             system_prompt=system_prompt,
+            generation_config=generation_config,
         )
 
     def _generate_response_details(
@@ -81,6 +87,7 @@ class ArenaInferenceService(AbstractService):
             prompt: str,
             history_messages: Sequence[Any] | None,
             system_prompt: str | None,
+            generation_config: dict[str, int | float] | None,
     ) -> dict[str, Any]:
         """
         Shared inference implementation for arena and chat flows.
@@ -90,6 +97,7 @@ class ArenaInferenceService(AbstractService):
             prompt: The user prompt to send to the model.
             history_messages: Optional persisted prior messages used as chat memory.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -106,6 +114,7 @@ class ArenaInferenceService(AbstractService):
             chat_model = self.llm_chat_factory_service.build_chat_model(
                 provider_name=model.provider_name,
                 model_name=runtime_model_name,
+                generation_config=generation_config,
             )
             messages = self._build_messages(
                 history_messages=history_messages,

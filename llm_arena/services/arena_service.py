@@ -9,6 +9,7 @@ from django.db.models import Max, Prefetch
 from django.utils import timezone
 
 from common.abstract import AbstractService
+from experimental_llm_arena.models import ExperimentConfig
 from llm_arena.exceptions import (
     ArenaBattleAlreadyVotedException,
     ArenaBattleGenerationFailedException,
@@ -55,6 +56,32 @@ class ArenaService(AbstractService):
         """
         normalized_prompt = self._normalize_prompt(prompt)
         model_a, model_b = self._select_random_models()
+        return self.create_battle_with_models(
+            prompt=normalized_prompt,
+            model_a=model_a,
+            model_b=model_b,
+        )
+
+    def create_battle_with_models(
+        self,
+        prompt: str,
+        model_a: LLMModel,
+        model_b: LLMModel,
+        experiment_config_fields: dict[str, Any] | None = None,
+    ) -> ArenaBattle:
+        """
+        Create a new battle for explicitly selected models and run the first turn.
+
+        Args:
+            prompt: The initial user prompt for the conversation battle.
+            model_a: Fixed model assigned to slot A.
+            model_b: Fixed model assigned to slot B.
+            experiment_config_fields: Optional experiment config fields to persist before generation.
+
+        Returns:
+            ArenaBattle: Persisted battle with its first completed turn.
+        """
+        normalized_prompt = self._normalize_prompt(prompt)
         battle = ArenaBattle.objects.create(
             model_a=model_a,
             model_b=model_b,
@@ -62,6 +89,11 @@ class ArenaService(AbstractService):
             error_message=None,
             completed_at=None,
         )
+        if experiment_config_fields is not None:
+            ExperimentConfig.objects.create(
+                battle=battle,
+                **experiment_config_fields,
+            )
 
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
         self._generate_turn(battle=battle, turn=turn)
@@ -145,7 +177,7 @@ class ArenaService(AbstractService):
         """
         battle = (
             ArenaBattle.objects
-            .select_related("model_a__provider", "model_b__provider")
+            .select_related("model_a__provider", "model_b__provider", "experiment_config")
             .prefetch_related(
                 Prefetch(
                     "turns",
@@ -209,8 +241,7 @@ class ArenaService(AbstractService):
         """
         vote = battle.vote
         winner_model = self._get_winner_model(battle=battle, choice=vote.choice)
-
-        return {
+        response_payload = {
             "id": battle.id,
             "status": battle.status,
             "choice": vote.choice,
@@ -245,6 +276,12 @@ class ArenaService(AbstractService):
                 for turn in battle.turns.all()
             ],
         }
+        experiment_payload = self._build_experiment_reveal_payload(
+            self._get_experiment_config(battle)
+        )
+        if experiment_payload is not None:
+            response_payload["experiment"] = experiment_payload
+        return response_payload
 
     def _generate_turn(self, battle: ArenaBattle, turn: ArenaTurn) -> None:
         """
@@ -272,10 +309,15 @@ class ArenaService(AbstractService):
             )
 
             try:
+                generation_config = self._get_slot_generation_config(
+                    battle=battle,
+                    slot=slot,
+                )
                 response_details = self.inference_service.generate_response_details_with_history(
                     model=llm_model,
                     history_messages=history_messages,
                     prompt=turn.prompt,
+                    generation_config=generation_config,
                 )
                 persisted_response.response_text = response_details["response_text"]
                 persisted_response.status = BattleResponse.ResponseStatus.COMPLETED
@@ -510,3 +552,121 @@ class ArenaService(AbstractService):
             "provider_display_name": model.provider.display_name,
             "is_winner": winning_slot != BattleVote.VoteChoice.TIE and slot == winning_slot,
         }
+
+    @staticmethod
+    def _get_slot_generation_config(
+        battle: ArenaBattle,
+        slot: str,
+    ) -> dict[str, int | float] | None:
+        """
+        Resolve the persisted runtime generation config for one battle slot.
+
+        Args:
+            battle: Battle whose experiment config may define runtime parameters.
+            slot: Slot whose generation config should be returned.
+
+        Returns:
+            dict[str, int | float] | None: Slot generation config or None for standard battles.
+        """
+        experiment_config = ArenaService._get_experiment_config(battle)
+        if experiment_config is None:
+            return None
+
+        slot_suffix = "a" if slot == BattleResponse.ResponseSlot.A else "b"
+        generation_config: dict[str, int | float] = {}
+        for parameter_name in (
+            "temperature",
+            "top_p",
+            "top_k",
+            "frequency_penalty",
+            "presence_penalty",
+        ):
+            if not getattr(experiment_config, f"{parameter_name}_enabled"):
+                continue
+            value = getattr(experiment_config, f"{parameter_name}_value_{slot_suffix}")
+            if value is None:
+                continue
+            generation_config[parameter_name] = (
+                int(value) if parameter_name == "top_k" else float(value)
+            )
+
+        return generation_config or None
+
+    @staticmethod
+    def _build_experiment_reveal_payload(
+        experiment_config: ExperimentConfig | None,
+    ) -> dict[str, Any] | None:
+        """
+        Build the experimental reveal payload for vote responses.
+
+        Args:
+            experiment_config: Persisted experiment config for the battle, if present.
+
+        Returns:
+            dict[str, Any] | None: Serialized experimental reveal payload or None.
+        """
+        if experiment_config is None:
+            return None
+
+        return {
+            "model_mode": experiment_config.model_mode,
+            "share_values_across_models": experiment_config.share_values_across_models,
+            "parameters": {
+                parameter_name: {
+                    "enabled": getattr(experiment_config, f"{parameter_name}_enabled"),
+                    "distribution": getattr(experiment_config, f"{parameter_name}_distribution"),
+                    "slot_a_value": (
+                        getattr(experiment_config, f"{parameter_name}_value_a")
+                        if parameter_name == "top_k"
+                        else ArenaService._serialize_decimal_value(
+                            getattr(experiment_config, f"{parameter_name}_value_a")
+                        )
+                    ),
+                    "slot_b_value": (
+                        getattr(experiment_config, f"{parameter_name}_value_b")
+                        if parameter_name == "top_k"
+                        else ArenaService._serialize_decimal_value(
+                            getattr(experiment_config, f"{parameter_name}_value_b")
+                        )
+                    ),
+                }
+                for parameter_name in (
+                    "temperature",
+                    "top_p",
+                    "top_k",
+                    "frequency_penalty",
+                    "presence_penalty",
+                )
+            },
+        }
+
+    @staticmethod
+    def _serialize_decimal_value(value: Any) -> float | None:
+        """
+        Convert a stored decimal-like value into a float for response serialization.
+
+        Args:
+            value: Decimal-like sampled value.
+
+        Returns:
+            float | None: Serialized float or None when the sampled value is empty.
+        """
+        if value is None:
+            return None
+        return float(value)
+
+    @staticmethod
+    def _get_experiment_config(battle: ArenaBattle) -> ExperimentConfig | None:
+        """
+        Safely return the experiment config linked to a battle when it exists.
+
+        Args:
+            battle: Battle whose linked experiment config should be retrieved.
+
+        Returns:
+            ExperimentConfig | None: Linked experiment config or None for standard battles.
+        """
+        try:
+            return battle.experiment_config
+        except ExperimentConfig.DoesNotExist:
+            return None

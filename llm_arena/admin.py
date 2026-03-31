@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin, messages
 
+from experimental_llm_arena.models import ExperimentConfig
 from helpers.env_variables import ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
 from llm_arena.models import ArenaBattle, ArenaTurn, BattleResponse, BattleVote, LLMModel, LLMProvider
 
@@ -182,6 +183,99 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
 
     answer_b.short_description = "answer B"
 
+
+class ExperimentConfigInline(ReadOnlyInlineMixin, admin.StackedInline):
+    model = ExperimentConfig
+    extra = 0
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "model_mode",
+                    "share_values_across_models",
+                ),
+            },
+        ),
+        (
+            "Temperature",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "temperature_enabled",
+                    "temperature_distribution",
+                    "temperature_value_a",
+                    "temperature_value_b",
+                ),
+            },
+        ),
+        (
+            "Top P",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "top_p_enabled",
+                    "top_p_distribution",
+                    "top_p_value_a",
+                    "top_p_value_b",
+                ),
+            },
+        ),
+        (
+            "Top K",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "top_k_enabled",
+                    "top_k_distribution",
+                    "top_k_value_a",
+                    "top_k_value_b",
+                ),
+            },
+        ),
+        (
+            "Penalties",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "frequency_penalty_enabled",
+                    "frequency_penalty_distribution",
+                    "frequency_penalty_value_a",
+                    "frequency_penalty_value_b",
+                    "presence_penalty_enabled",
+                    "presence_penalty_distribution",
+                    "presence_penalty_value_a",
+                    "presence_penalty_value_b",
+                ),
+            },
+        ),
+    )
+    readonly_fields = (
+        "model_mode",
+        "share_values_across_models",
+        "temperature_enabled",
+        "temperature_distribution",
+        "temperature_value_a",
+        "temperature_value_b",
+        "top_p_enabled",
+        "top_p_distribution",
+        "top_p_value_a",
+        "top_p_value_b",
+        "top_k_enabled",
+        "top_k_distribution",
+        "top_k_value_a",
+        "top_k_value_b",
+        "frequency_penalty_enabled",
+        "frequency_penalty_distribution",
+        "frequency_penalty_value_a",
+        "frequency_penalty_value_b",
+        "presence_penalty_enabled",
+        "presence_penalty_distribution",
+        "presence_penalty_value_a",
+        "presence_penalty_value_b",
+    )
+
+
 class BattleVoteInline(ReadOnlyInlineMixin, admin.StackedInline):
     model = BattleVote
     extra = 0
@@ -193,7 +287,7 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_filter = ("status", "model_a__provider", "model_b__provider")
     search_fields = ("id", "model_a__name", "model_b__name", "error_message")
     fields = ("model_a", "model_b", "status", "error_message", "completed_at", "created_at", "updated_at")
-    inlines = (ArenaTurnInline, BattleVoteInline)
+    inlines = (ExperimentConfigInline, ArenaTurnInline, BattleVoteInline)
 
     def has_add_permission(self, request) -> bool:
         return False

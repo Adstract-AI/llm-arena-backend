@@ -54,6 +54,34 @@ class BattleVoteTurnSerializer(serializers.Serializer):
     responses = BattleVoteTurnResponseSerializer(many=True)
 
 
+class BattleVoteExperimentParameterSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField()
+    distribution = serializers.CharField(allow_null=True)
+    slot_a_value = serializers.FloatField(allow_null=True)
+    slot_b_value = serializers.FloatField(allow_null=True)
+
+
+class BattleVoteExperimentTopKParameterSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField()
+    distribution = serializers.CharField(allow_null=True)
+    slot_a_value = serializers.IntegerField(allow_null=True)
+    slot_b_value = serializers.IntegerField(allow_null=True)
+
+
+class BattleVoteExperimentParametersSerializer(serializers.Serializer):
+    temperature = BattleVoteExperimentParameterSerializer()
+    top_p = BattleVoteExperimentParameterSerializer()
+    top_k = BattleVoteExperimentTopKParameterSerializer()
+    frequency_penalty = BattleVoteExperimentParameterSerializer()
+    presence_penalty = BattleVoteExperimentParameterSerializer()
+
+
+class BattleVoteExperimentSerializer(serializers.Serializer):
+    model_mode = serializers.CharField()
+    share_values_across_models = serializers.BooleanField(allow_null=True)
+    parameters = BattleVoteExperimentParametersSerializer()
+
+
 class BattleVoteResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
@@ -63,6 +91,7 @@ class BattleVoteResponseSerializer(serializers.Serializer):
     winner_model_name = serializers.CharField(allow_null=True)
     models = BattleVoteRevealModelSerializer(many=True)
     turns = BattleVoteTurnSerializer(many=True)
+    experiment = BattleVoteExperimentSerializer(required=False, allow_null=True)
 
 
 class LeaderboardEntrySerializer(serializers.Serializer):

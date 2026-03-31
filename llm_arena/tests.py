@@ -144,6 +144,7 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(len(vote_response.data["models"]), 2)
         self.assertTrue(vote_response.data["models"][0]["is_winner"])
         self.assertFalse(vote_response.data["models"][1]["is_winner"])
+        self.assertNotIn("experiment", vote_response.data)
         self.assertEqual(len(vote_response.data["turns"]), 1)
         self.assertEqual(
             vote_response.data["turns"][0]["responses"],

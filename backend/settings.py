@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'common',
     'chat',
     'llm_arena',
+    'experimental_llm_arena',
 ]
 
 MIDDLEWARE = [
