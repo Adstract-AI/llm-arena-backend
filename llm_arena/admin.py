@@ -213,54 +213,15 @@ class ExperimentConfigInline(ReadOnlyInlineMixin, admin.StackedInline):
             },
         ),
         (
-            "Temperature",
+            "Parameter Summaries",
             {
                 "classes": ("collapse",),
                 "fields": (
-                    "temperature_enabled",
-                    "temperature_distribution",
-                    "temperature_value_a",
-                    "temperature_value_b",
-                ),
-            },
-        ),
-        (
-            "Top P",
-            {
-                "classes": ("collapse",),
-                "fields": (
-                    "top_p_enabled",
-                    "top_p_distribution",
-                    "top_p_value_a",
-                    "top_p_value_b",
-                ),
-            },
-        ),
-        (
-            "Top K",
-            {
-                "classes": ("collapse",),
-                "fields": (
-                    "top_k_enabled",
-                    "top_k_distribution",
-                    "top_k_value_a",
-                    "top_k_value_b",
-                ),
-            },
-        ),
-        (
-            "Penalties",
-            {
-                "classes": ("collapse",),
-                "fields": (
-                    "frequency_penalty_enabled",
-                    "frequency_penalty_distribution",
-                    "frequency_penalty_value_a",
-                    "frequency_penalty_value_b",
-                    "presence_penalty_enabled",
-                    "presence_penalty_distribution",
-                    "presence_penalty_value_a",
-                    "presence_penalty_value_b",
+                    "temperature_summary",
+                    "top_p_summary",
+                    "top_k_summary",
+                    "frequency_penalty_summary",
+                    "presence_penalty_summary",
                 ),
             },
         ),
@@ -268,27 +229,48 @@ class ExperimentConfigInline(ReadOnlyInlineMixin, admin.StackedInline):
     readonly_fields = (
         "model_mode",
         "share_values_across_models",
-        "temperature_enabled",
-        "temperature_distribution",
-        "temperature_value_a",
-        "temperature_value_b",
-        "top_p_enabled",
-        "top_p_distribution",
-        "top_p_value_a",
-        "top_p_value_b",
-        "top_k_enabled",
-        "top_k_distribution",
-        "top_k_value_a",
-        "top_k_value_b",
-        "frequency_penalty_enabled",
-        "frequency_penalty_distribution",
-        "frequency_penalty_value_a",
-        "frequency_penalty_value_b",
-        "presence_penalty_enabled",
-        "presence_penalty_distribution",
-        "presence_penalty_value_a",
-        "presence_penalty_value_b",
+        "temperature_summary",
+        "top_p_summary",
+        "top_k_summary",
+        "frequency_penalty_summary",
+        "presence_penalty_summary",
     )
+
+    @staticmethod
+    def _build_parameter_summary(obj: ExperimentConfig, parameter_name: str) -> str:
+        parameter_config = obj.get_parameter_config(parameter_name)
+        if parameter_config is None:
+            return "disabled"
+
+        return (
+            f"{parameter_config.distribution}: "
+            f"A={parameter_config.value_a}, B={parameter_config.value_b}"
+        )
+
+    def temperature_summary(self, obj: ExperimentConfig) -> str:
+        return self._build_parameter_summary(obj, "temperature")
+
+    temperature_summary.short_description = "temperature"
+
+    def top_p_summary(self, obj: ExperimentConfig) -> str:
+        return self._build_parameter_summary(obj, "top_p")
+
+    top_p_summary.short_description = "top p"
+
+    def top_k_summary(self, obj: ExperimentConfig) -> str:
+        return self._build_parameter_summary(obj, "top_k")
+
+    top_k_summary.short_description = "top k"
+
+    def frequency_penalty_summary(self, obj: ExperimentConfig) -> str:
+        return self._build_parameter_summary(obj, "frequency_penalty")
+
+    frequency_penalty_summary.short_description = "frequency penalty"
+
+    def presence_penalty_summary(self, obj: ExperimentConfig) -> str:
+        return self._build_parameter_summary(obj, "presence_penalty")
+
+    presence_penalty_summary.short_description = "presence penalty"
 
 
 class BattleVoteInline(ReadOnlyInlineMixin, admin.StackedInline):

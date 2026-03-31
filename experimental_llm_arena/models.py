@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 
 from common.models import TimestampedModel
@@ -41,7 +42,7 @@ class ParameterSamplingSpec(TimestampedModel):
 
 
 class ExperimentConfig(TimestampedModel):
-    """Store the sampled runtime generation configuration for one arena battle."""
+    """Store battle-level experimental metadata for one arena battle."""
 
     class ModelMode(models.TextChoices):
         SAME_MODEL = "same_model", "Same Model"
@@ -60,98 +61,139 @@ class ExperimentConfig(TimestampedModel):
     model_mode = models.CharField(max_length=24, choices=ModelMode.choices)
     share_values_across_models = models.BooleanField(null=True, blank=True)
 
-    temperature_enabled = models.BooleanField(default=False)
-    temperature_distribution = models.CharField(
-        max_length=16,
-        choices=DistributionType.choices,
-        null=True,
-        blank=True,
-    )
-    temperature_value_a = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-    temperature_value_b = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-
-    top_p_enabled = models.BooleanField(default=False)
-    top_p_distribution = models.CharField(
-        max_length=16,
-        choices=DistributionType.choices,
-        null=True,
-        blank=True,
-    )
-    top_p_value_a = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-    top_p_value_b = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-
-    top_k_enabled = models.BooleanField(default=False)
-    top_k_distribution = models.CharField(
-        max_length=16,
-        choices=DistributionType.choices,
-        null=True,
-        blank=True,
-    )
-    top_k_value_a = models.PositiveIntegerField(null=True, blank=True)
-    top_k_value_b = models.PositiveIntegerField(null=True, blank=True)
-
-    frequency_penalty_enabled = models.BooleanField(default=False)
-    frequency_penalty_distribution = models.CharField(
-        max_length=16,
-        choices=DistributionType.choices,
-        null=True,
-        blank=True,
-    )
-    frequency_penalty_value_a = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-    frequency_penalty_value_b = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-
-    presence_penalty_enabled = models.BooleanField(default=False)
-    presence_penalty_distribution = models.CharField(
-        max_length=16,
-        choices=DistributionType.choices,
-        null=True,
-        blank=True,
-    )
-    presence_penalty_value_a = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-    presence_penalty_value_b = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        null=True,
-        blank=True,
-    )
-
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return f"ExperimentConfig<{self.battle_id}>"
+
+    def get_parameter_config(self, parameter_name: str) -> models.Model | None:
+        """
+        Return the child config model for one experimental parameter when present.
+
+        Args:
+            parameter_name: Parameter identifier to resolve.
+
+        Returns:
+            models.Model | None: Linked parameter config instance or None.
+        """
+        related_name = EXPERIMENT_PARAMETER_CONFIG_MAP[parameter_name]["related_name"]
+        try:
+            return getattr(self, related_name)
+        except ObjectDoesNotExist:
+            return None
+
+
+class BaseExperimentParameterConfig(TimestampedModel):
+    """Store one enabled parameter configuration for an experimental battle."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+    )
+    distribution = models.CharField(
+        max_length=16,
+        choices=ExperimentConfig.DistributionType.choices,
+    )
+
+    class Meta:
+        abstract = True
+
+
+class DecimalExperimentParameterConfig(BaseExperimentParameterConfig):
+    """Base model for decimal-valued experimental parameters."""
+
+    value_a = models.DecimalField(max_digits=6, decimal_places=4)
+    value_b = models.DecimalField(max_digits=6, decimal_places=4)
+
+    class Meta:
+        abstract = True
+
+
+class IntegerExperimentParameterConfig(BaseExperimentParameterConfig):
+    """Base model for integer-valued experimental parameters."""
+
+    value_a = models.PositiveIntegerField()
+    value_b = models.PositiveIntegerField()
+
+    class Meta:
+        abstract = True
+
+
+class TemperatureExperimentConfig(DecimalExperimentParameterConfig):
+    """Store sampled temperature values for one experiment."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+        related_name="temperature_config",
+    )
+
+
+class TopPExperimentConfig(DecimalExperimentParameterConfig):
+    """Store sampled top-p values for one experiment."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+        related_name="top_p_config",
+    )
+
+
+class TopKExperimentConfig(IntegerExperimentParameterConfig):
+    """Store sampled top-k values for one experiment."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+        related_name="top_k_config",
+    )
+
+
+class FrequencyPenaltyExperimentConfig(DecimalExperimentParameterConfig):
+    """Store sampled frequency penalty values for one experiment."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+        related_name="frequency_penalty_config",
+    )
+
+
+class PresencePenaltyExperimentConfig(DecimalExperimentParameterConfig):
+    """Store sampled presence penalty values for one experiment."""
+
+    experiment_config = models.OneToOneField(
+        ExperimentConfig,
+        on_delete=models.CASCADE,
+        related_name="presence_penalty_config",
+    )
+
+
+EXPERIMENT_PARAMETER_CONFIG_MAP = {
+    ParameterSamplingSpec.ParameterName.TEMPERATURE: {
+        "model": TemperatureExperimentConfig,
+        "related_name": "temperature_config",
+        "value_type": ParameterSamplingSpec.ValueType.FLOAT,
+    },
+    ParameterSamplingSpec.ParameterName.TOP_P: {
+        "model": TopPExperimentConfig,
+        "related_name": "top_p_config",
+        "value_type": ParameterSamplingSpec.ValueType.FLOAT,
+    },
+    ParameterSamplingSpec.ParameterName.TOP_K: {
+        "model": TopKExperimentConfig,
+        "related_name": "top_k_config",
+        "value_type": ParameterSamplingSpec.ValueType.INTEGER,
+    },
+    ParameterSamplingSpec.ParameterName.FREQUENCY_PENALTY: {
+        "model": FrequencyPenaltyExperimentConfig,
+        "related_name": "frequency_penalty_config",
+        "value_type": ParameterSamplingSpec.ValueType.FLOAT,
+    },
+    ParameterSamplingSpec.ParameterName.PRESENCE_PENALTY: {
+        "model": PresencePenaltyExperimentConfig,
+        "related_name": "presence_penalty_config",
+        "value_type": ParameterSamplingSpec.ValueType.FLOAT,
+    },
+}

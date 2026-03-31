@@ -1,5 +1,6 @@
 import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -9,7 +10,10 @@ from django.db.models import Max, Prefetch
 from django.utils import timezone
 
 from common.abstract import AbstractService
-from experimental_llm_arena.models import ExperimentConfig
+from experimental_llm_arena.models import (
+    EXPERIMENT_PARAMETER_CONFIG_MAP,
+    ExperimentConfig,
+)
 from llm_arena.exceptions import (
     ArenaBattleAlreadyVotedException,
     ArenaBattleGenerationFailedException,
@@ -67,7 +71,7 @@ class ArenaService(AbstractService):
         prompt: str,
         model_a: LLMModel,
         model_b: LLMModel,
-        experiment_config_fields: dict[str, Any] | None = None,
+        experiment_setup_callback: Callable[[ArenaBattle], None] | None = None,
     ) -> ArenaBattle:
         """
         Create a new battle for explicitly selected models and run the first turn.
@@ -76,7 +80,7 @@ class ArenaService(AbstractService):
             prompt: The initial user prompt for the conversation battle.
             model_a: Fixed model assigned to slot A.
             model_b: Fixed model assigned to slot B.
-            experiment_config_fields: Optional experiment config fields to persist before generation.
+            experiment_setup_callback: Optional callback that persists experiment configuration before generation.
 
         Returns:
             ArenaBattle: Persisted battle with its first completed turn.
@@ -89,11 +93,8 @@ class ArenaService(AbstractService):
             error_message=None,
             completed_at=None,
         )
-        if experiment_config_fields is not None:
-            ExperimentConfig.objects.create(
-                battle=battle,
-                **experiment_config_fields,
-            )
+        if experiment_setup_callback is not None:
+            experiment_setup_callback(battle)
 
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
         self._generate_turn(battle=battle, turn=turn)
@@ -177,7 +178,16 @@ class ArenaService(AbstractService):
         """
         battle = (
             ArenaBattle.objects
-            .select_related("model_a__provider", "model_b__provider", "experiment_config")
+            .select_related(
+                "model_a__provider",
+                "model_b__provider",
+                "experiment_config",
+                "experiment_config__temperature_config",
+                "experiment_config__top_p_config",
+                "experiment_config__top_k_config",
+                "experiment_config__frequency_penalty_config",
+                "experiment_config__presence_penalty_config",
+            )
             .prefetch_related(
                 Prefetch(
                     "turns",
@@ -574,20 +584,14 @@ class ArenaService(AbstractService):
 
         slot_suffix = "a" if slot == BattleResponse.ResponseSlot.A else "b"
         generation_config: dict[str, int | float] = {}
-        for parameter_name in (
-            "temperature",
-            "top_p",
-            "top_k",
-            "frequency_penalty",
-            "presence_penalty",
-        ):
-            if not getattr(experiment_config, f"{parameter_name}_enabled"):
-                continue
-            value = getattr(experiment_config, f"{parameter_name}_value_{slot_suffix}")
-            if value is None:
+        for parameter_name, parameter_config_map in EXPERIMENT_PARAMETER_CONFIG_MAP.items():
+            parameter_config = experiment_config.get_parameter_config(parameter_name)
+            if parameter_config is None:
                 continue
             generation_config[parameter_name] = (
-                int(value) if parameter_name == "top_k" else float(value)
+                int(getattr(parameter_config, f"value_{slot_suffix}"))
+                if parameter_config_map["value_type"] == "int"
+                else float(getattr(parameter_config, f"value_{slot_suffix}"))
             )
 
         return generation_config or None
@@ -612,31 +616,12 @@ class ArenaService(AbstractService):
             "model_mode": experiment_config.model_mode,
             "share_values_across_models": experiment_config.share_values_across_models,
             "parameters": {
-                parameter_name: {
-                    "enabled": getattr(experiment_config, f"{parameter_name}_enabled"),
-                    "distribution": getattr(experiment_config, f"{parameter_name}_distribution"),
-                    "slot_a_value": (
-                        getattr(experiment_config, f"{parameter_name}_value_a")
-                        if parameter_name == "top_k"
-                        else ArenaService._serialize_decimal_value(
-                            getattr(experiment_config, f"{parameter_name}_value_a")
-                        )
-                    ),
-                    "slot_b_value": (
-                        getattr(experiment_config, f"{parameter_name}_value_b")
-                        if parameter_name == "top_k"
-                        else ArenaService._serialize_decimal_value(
-                            getattr(experiment_config, f"{parameter_name}_value_b")
-                        )
-                    ),
-                }
-                for parameter_name in (
-                    "temperature",
-                    "top_p",
-                    "top_k",
-                    "frequency_penalty",
-                    "presence_penalty",
+                parameter_name: ArenaService._build_parameter_reveal_payload(
+                    experiment_config=experiment_config,
+                    parameter_name=parameter_name,
+                    value_type=parameter_config_map["value_type"],
                 )
+                for parameter_name, parameter_config_map in EXPERIMENT_PARAMETER_CONFIG_MAP.items()
             },
         }
 
@@ -654,6 +639,46 @@ class ArenaService(AbstractService):
         if value is None:
             return None
         return float(value)
+
+    @staticmethod
+    def _build_parameter_reveal_payload(
+        experiment_config: ExperimentConfig,
+        parameter_name: str,
+        value_type: str,
+    ) -> dict[str, Any]:
+        """
+        Build the reveal payload for one experimental parameter.
+
+        Args:
+            experiment_config: Persisted experiment config for the battle.
+            parameter_name: Parameter identifier to serialize.
+            value_type: Parameter value type identifier.
+
+        Returns:
+            dict[str, Any]: Reveal payload for one parameter.
+        """
+        parameter_config = experiment_config.get_parameter_config(parameter_name)
+        if parameter_config is None:
+            return {
+                "enabled": False,
+                "distribution": None,
+                "slot_a_value": None,
+                "slot_b_value": None,
+            }
+
+        if value_type == "int":
+            slot_a_value = parameter_config.value_a
+            slot_b_value = parameter_config.value_b
+        else:
+            slot_a_value = ArenaService._serialize_decimal_value(parameter_config.value_a)
+            slot_b_value = ArenaService._serialize_decimal_value(parameter_config.value_b)
+
+        return {
+            "enabled": True,
+            "distribution": parameter_config.distribution,
+            "slot_a_value": slot_a_value,
+            "slot_b_value": slot_b_value,
+        }
 
     @staticmethod
     def _get_experiment_config(battle: ArenaBattle) -> ExperimentConfig | None:

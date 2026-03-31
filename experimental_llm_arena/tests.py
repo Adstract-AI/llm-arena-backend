@@ -5,7 +5,11 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from experimental_llm_arena.models import ExperimentConfig, ParameterSamplingSpec
+from experimental_llm_arena.models import (
+    ExperimentConfig,
+    ParameterSamplingSpec,
+    TemperatureExperimentConfig,
+)
 from experimental_llm_arena.services.experimental_arena_service import ExperimentalArenaService
 from llm_arena.models import ArenaBattle, LLMModel, LLMProvider
 from llm_arena.services.arena_service import ArenaService
@@ -164,9 +168,15 @@ class ExperimentalArenaApiTests(APITestCase):
         self.assertEqual(battle.model_a_id, self.openai_model.id)
         self.assertEqual(battle.model_b_id, self.openai_model.id)
         self.assertEqual(experiment_config.model_mode, ExperimentConfig.ModelMode.SAME_MODEL)
-        self.assertEqual(experiment_config.temperature_value_a, Decimal("0.5000"))
-        self.assertEqual(experiment_config.temperature_value_b, Decimal("0.9000"))
-        self.assertFalse(experiment_config.top_p_enabled)
+        self.assertEqual(
+            TemperatureExperimentConfig.objects.get(experiment_config=experiment_config).value_a,
+            Decimal("0.5000"),
+        )
+        self.assertEqual(
+            TemperatureExperimentConfig.objects.get(experiment_config=experiment_config).value_b,
+            Decimal("0.9000"),
+        )
+        self.assertIsNone(experiment_config.get_parameter_config("top_p"))
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
     @patch.object(ExperimentalArenaService, "_sample_parameter_value")

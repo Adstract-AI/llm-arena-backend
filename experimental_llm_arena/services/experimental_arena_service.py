@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
@@ -10,7 +11,11 @@ from experimental_llm_arena.exceptions import (
     ExperimentalArenaMissingSamplingSpecException,
     ExperimentalArenaSamplingException,
 )
-from experimental_llm_arena.models import ExperimentConfig, ParameterSamplingSpec
+from experimental_llm_arena.models import (
+    EXPERIMENT_PARAMETER_CONFIG_MAP,
+    ExperimentConfig,
+    ParameterSamplingSpec,
+)
 from llm_arena.models import ArenaBattle, LLMModel
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.llm_model_service import LLMModelService
@@ -63,7 +68,7 @@ class ExperimentalArenaService(AbstractService):
             compatible_models=compatible_models,
             model_mode=model_mode,
         )
-        experiment_config_fields = self._build_experiment_config_fields(
+        experiment_config_fields, parameter_config_payloads = self._build_experiment_config_payloads(
             model_mode=model_mode,
             share_values_across_models=share_values_across_models,
             parameters=parameters,
@@ -74,7 +79,10 @@ class ExperimentalArenaService(AbstractService):
             prompt=prompt,
             model_a=model_a,
             model_b=model_b,
-            experiment_config_fields=experiment_config_fields,
+            experiment_setup_callback=self._build_experiment_setup_callback(
+                experiment_config_fields=experiment_config_fields,
+                parameter_config_payloads=parameter_config_payloads,
+            ),
         )
 
     def _get_enabled_parameter_names(self, parameters: dict[str, dict[str, Any]]) -> list[str]:
@@ -188,15 +196,15 @@ class ExperimentalArenaService(AbstractService):
         selected_models = random.sample(compatible_models, 2)
         return selected_models[0], selected_models[1]
 
-    def _build_experiment_config_fields(
+    def _build_experiment_config_payloads(
         self,
         model_mode: str,
         share_values_across_models: bool | None,
         parameters: dict[str, dict[str, Any]],
         sampling_specs: dict[str, ParameterSamplingSpec],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """
-        Build the persisted experiment configuration field payload for one battle.
+        Build the persisted experiment configuration payloads for one battle.
 
         Args:
             model_mode: Same-model or different-model experiment mode.
@@ -205,12 +213,12 @@ class ExperimentalArenaService(AbstractService):
             sampling_specs: Loaded sampling specs keyed by parameter name.
 
         Returns:
-            dict[str, Any]: Model fields for ExperimentConfig creation.
+            tuple[dict[str, Any], list[dict[str, Any]]]: Base config fields and child config payloads.
 
         Raises:
             ExperimentalArenaSamplingException: If same-model sampling cannot produce distinct slots.
         """
-        fields: dict[str, Any] = {
+        experiment_config_fields: dict[str, Any] = {
             "model_mode": model_mode,
             "share_values_across_models": share_values_across_models,
         }
@@ -227,13 +235,20 @@ class ExperimentalArenaService(AbstractService):
                 share_values_across_models=bool(share_values_across_models),
             )
 
+        parameter_config_payloads: list[dict[str, Any]] = []
         for parameter_name, parameter_config in parameters.items():
-            fields[f"{parameter_name}_enabled"] = parameter_config["enabled"]
-            fields[f"{parameter_name}_distribution"] = parameter_config.get("distribution")
-            fields[f"{parameter_name}_value_a"] = sampled_values[parameter_name]["value_a"]
-            fields[f"{parameter_name}_value_b"] = sampled_values[parameter_name]["value_b"]
+            if not parameter_config["enabled"]:
+                continue
+            parameter_config_payloads.append(
+                {
+                    "parameter_name": parameter_name,
+                    "distribution": parameter_config["distribution"],
+                    "value_a": sampled_values[parameter_name]["value_a"],
+                    "value_b": sampled_values[parameter_name]["value_b"],
+                }
+            )
 
-        return fields
+        return experiment_config_fields, parameter_config_payloads
 
     def _sample_same_model_values(
         self,
@@ -338,6 +353,40 @@ class ExperimentalArenaService(AbstractService):
             return int(round(clipped_value))
 
         return Decimal(str(clipped_value)).quantize(self.FLOAT_QUANTIZER)
+
+    def _build_experiment_setup_callback(
+        self,
+        experiment_config_fields: dict[str, Any],
+        parameter_config_payloads: list[dict[str, Any]],
+    ) -> Callable[[ArenaBattle], None]:
+        """
+        Build the persistence callback that creates the experiment config and child rows.
+
+        Args:
+            experiment_config_fields: Base ExperimentConfig field values.
+            parameter_config_payloads: Child parameter config payloads to persist.
+
+        Returns:
+            Callable[[ArenaBattle], None]: Callback used by the arena service before turn generation.
+        """
+
+        def setup_experiment(battle: ArenaBattle) -> None:
+            experiment_config = ExperimentConfig.objects.create(
+                battle=battle,
+                **experiment_config_fields,
+            )
+            for parameter_config_payload in parameter_config_payloads:
+                parameter_model = EXPERIMENT_PARAMETER_CONFIG_MAP[
+                    parameter_config_payload["parameter_name"]
+                ]["model"]
+                parameter_model.objects.create(
+                    experiment_config=experiment_config,
+                    distribution=parameter_config_payload["distribution"],
+                    value_a=parameter_config_payload["value_a"],
+                    value_b=parameter_config_payload["value_b"],
+                )
+
+        return setup_experiment
 
     @staticmethod
     def _has_any_slot_difference(
