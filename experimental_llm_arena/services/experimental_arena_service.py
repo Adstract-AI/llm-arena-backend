@@ -220,7 +220,11 @@ class ExperimentalArenaService(AbstractService):
         """
         experiment_config_fields: dict[str, Any] = {
             "model_mode": model_mode,
-            "share_values_across_models": share_values_across_models,
+            "share_values_across_models": (
+                False
+                if model_mode == ExperimentConfig.ModelMode.SAME_MODEL
+                else share_values_across_models
+            ),
         }
 
         if model_mode == ExperimentConfig.ModelMode.SAME_MODEL:

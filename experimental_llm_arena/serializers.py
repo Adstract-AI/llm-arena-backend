@@ -48,6 +48,7 @@ class ExperimentalBattleCreateRequestSerializer(serializers.Serializer):
     def validate(self, attrs: dict) -> dict:
         model_mode = attrs["model_mode"]
         share_values_across_models = attrs.get("share_values_across_models")
+        share_values_field_provided = "share_values_across_models" in self.initial_data
         parameters = attrs["parameters"]
 
         if not any(parameter["enabled"] for parameter in parameters.values()):
@@ -55,14 +56,17 @@ class ExperimentalBattleCreateRequestSerializer(serializers.Serializer):
                 {"parameters": "At least one experimental parameter must be enabled."}
             )
 
-        if model_mode == ExperimentConfig.ModelMode.SAME_MODEL and share_values_across_models is not None:
-            raise serializers.ValidationError(
-                {
-                    "share_values_across_models": (
-                        "This field must be null when the experiment uses the same model."
-                    )
-                }
-            )
+        if model_mode == ExperimentConfig.ModelMode.SAME_MODEL:
+            if not share_values_field_provided:
+                attrs["share_values_across_models"] = False
+            elif share_values_across_models is not False:
+                raise serializers.ValidationError(
+                    {
+                        "share_values_across_models": (
+                            "This field must be false when the experiment uses the same model."
+                        )
+                    }
+                )
 
         if (
             model_mode == ExperimentConfig.ModelMode.DIFFERENT_MODELS
@@ -77,4 +81,3 @@ class ExperimentalBattleCreateRequestSerializer(serializers.Serializer):
             )
 
         return attrs
-

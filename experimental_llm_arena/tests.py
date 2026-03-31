@@ -148,7 +148,7 @@ class ExperimentalArenaApiTests(APITestCase):
             {
                 "prompt": "Explain friendship.",
                 "model_mode": "same_model",
-                "share_values_across_models": None,
+                "share_values_across_models": False,
                 "parameters": {
                     "temperature": {"enabled": True, "distribution": "normal"},
                     "top_p": {"enabled": False, "distribution": None},
@@ -168,6 +168,7 @@ class ExperimentalArenaApiTests(APITestCase):
         self.assertEqual(battle.model_a_id, self.openai_model.id)
         self.assertEqual(battle.model_b_id, self.openai_model.id)
         self.assertEqual(experiment_config.model_mode, ExperimentConfig.ModelMode.SAME_MODEL)
+        self.assertFalse(experiment_config.share_values_across_models)
         self.assertEqual(
             TemperatureExperimentConfig.objects.get(experiment_config=experiment_config).value_a,
             Decimal("0.5000"),
