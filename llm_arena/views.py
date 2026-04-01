@@ -6,6 +6,7 @@ from common.abstract import ServiceView
 from llm_arena.serializers import (
     ArenaBattleSnapshotSerializer,
     BattleCreateRequestSerializer,
+    BattleResponseUpdateRequestSerializer,
     BattleTurnCreateRequestSerializer,
     BattleVoteRequestSerializer,
     BattleVoteResponseSerializer,
@@ -54,6 +55,28 @@ class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ArenaBattleResponseUpdateView(ServiceView[ArenaService]):
+    """Create or update one saved response improvement for an experimental battle."""
+
+    service_class = ArenaService
+    serializer_class = BattleResponseUpdateRequestSerializer
+
+    def patch(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        battle = self.service.update_experimental_response(
+            battle_id=kwargs["id"],
+            turn_number=kwargs["turn_number"],
+            slot=kwargs["slot"],
+            response_text=serializer.validated_data["response_text"],
+        )
+        response_serializer = ArenaBattleSnapshotSerializer(
+            self.service.build_battle_snapshot(battle)
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
 class ArenaBattleDetailView(ServiceView[ArenaService], RetrieveAPIView):

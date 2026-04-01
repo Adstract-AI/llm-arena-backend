@@ -12,6 +12,7 @@
         return;
       }
 
+      container.classList.add('judge-model-action-field');
       container.style.display = shouldShowJudgeModel ? '' : 'none';
     });
   }

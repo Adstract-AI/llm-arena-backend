@@ -20,10 +20,24 @@ from llm_arena.exceptions import (
     ArenaBattleNotContinuableException,
     ArenaBattleNotFoundException,
     ArenaBattleNotReadyForVoteException,
+    ArenaBattleResponseEditAfterVotingException,
+    ArenaBattleResponseEditNotExperimentalException,
+    ArenaBattleResponseEditNotLatestTurnException,
+    ArenaBattleResponseNotEditableException,
+    ArenaBattleResponseNotFoundException,
+    ArenaBattleTurnNotFoundException,
     InsufficientActiveLLMModelsException,
     LLMInferenceException,
 )
-from llm_arena.models import ArenaBattle, ArenaTurn, BattleResponse, BattleVote, LLMModel
+from llm_arena.models import (
+    ArenaBattle,
+    ArenaTurn,
+    BattleResponse,
+    BattleResponseImprovement,
+    BattleVote,
+    LLMJudgeVote,
+    LLMModel,
+)
 from llm_arena.services.inference_service import ArenaInferenceService
 from llm_arena.services.llm_model_service import LLMModelService
 
@@ -129,6 +143,86 @@ class ArenaService(AbstractService):
         return self.get_battle(battle.id)
 
     @transaction.atomic
+    def update_experimental_response(
+        self,
+        battle_id: UUID,
+        turn_number: int,
+        slot: str,
+        response_text: str,
+    ) -> ArenaBattle:
+        """
+        Create or update one saved response improvement for the latest completed turn of an experimental battle.
+
+        Args:
+            battle_id: UUID primary key for the battle.
+            turn_number: Battle-local turn number containing the response to improve.
+            slot: Response slot identifier to improve.
+            response_text: User-authored improved response text.
+
+        Returns:
+            ArenaBattle: Battle snapshot source with the saved response improvement persisted.
+
+        Raises:
+            ArenaBattleNotFoundException: If the battle UUID does not exist.
+            ArenaBattleResponseEditNotExperimentalException: If the battle is not experimental.
+            ArenaBattleResponseEditAfterVotingException: If the battle already has a human or judge vote.
+            ArenaBattleTurnNotFoundException: If the turn does not exist for the selected battle.
+            ArenaBattleResponseEditNotLatestTurnException: If the target turn is not the latest completed turn.
+            ArenaBattleResponseNotFoundException: If the slot is invalid or the response row does not exist.
+            ArenaBattleResponseNotEditableException: If the response is not in a completed state.
+        """
+        normalized_response_text = response_text.strip()
+        battle = self._get_battle_for_update(battle_id)
+
+        if self._get_experiment_config(battle) is None:
+            raise ArenaBattleResponseEditNotExperimentalException()
+
+        if (
+            BattleVote.objects.filter(battle=battle).exists()
+            or LLMJudgeVote.objects.filter(battle=battle).exists()
+        ):
+            raise ArenaBattleResponseEditAfterVotingException()
+
+        target_turn = (
+            ArenaTurn.objects
+            .filter(battle=battle, turn_number=turn_number)
+            .first()
+        )
+        if target_turn is None:
+            raise ArenaBattleTurnNotFoundException()
+
+        latest_completed_turn_number = (
+            ArenaTurn.objects
+            .filter(
+                battle=battle,
+                status=ArenaTurn.TurnStatus.COMPLETED,
+            )
+            .aggregate(max_turn_number=Max("turn_number"))["max_turn_number"]
+        )
+        if latest_completed_turn_number != target_turn.turn_number:
+            raise ArenaBattleResponseEditNotLatestTurnException()
+
+        if slot not in BattleResponse.ResponseSlot.values:
+            raise ArenaBattleResponseNotFoundException()
+
+        target_response = (
+            BattleResponse.objects
+            .filter(turn=target_turn, slot=slot)
+            .first()
+        )
+        if target_response is None:
+            raise ArenaBattleResponseNotFoundException()
+
+        if target_response.status != BattleResponse.ResponseStatus.COMPLETED:
+            raise ArenaBattleResponseNotEditableException()
+
+        BattleResponseImprovement.objects.update_or_create(
+            response=target_response,
+            defaults={"improved_response_text": normalized_response_text},
+        )
+        return self.get_battle(battle.id)
+
+    @transaction.atomic
     def submit_vote(self, battle_id: UUID, choice: str, feedback: str = "") -> BattleVote:
         """
         Persist a vote for a battle transcript that is ready for voting.
@@ -196,7 +290,7 @@ class ArenaService(AbstractService):
                         .prefetch_related(
                             Prefetch(
                                 "responses",
-                                queryset=BattleResponse.objects.order_by("slot"),
+                                queryset=BattleResponse.objects.select_related("improvement").order_by("slot"),
                             )
                         )
                     ),
@@ -231,6 +325,7 @@ class ArenaService(AbstractService):
                         {
                             "slot": response.slot,
                             "response_text": response.response_text,
+                            "improvement_text": response.improvement_text,
                         }
                         for response in turn.responses.all()
                     ],
@@ -278,6 +373,7 @@ class ArenaService(AbstractService):
                         {
                             "slot": response.slot,
                             "response_text": response.response_text,
+                            "improvement_text": response.improvement_text,
                             "is_winner": vote.choice != BattleVote.VoteChoice.TIE and response.slot == vote.choice,
                         }
                         for response in turn.responses.all()

@@ -6,6 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from experimental_llm_arena.models import ExperimentConfig
 from llm_arena.admin import ArenaBattleAdmin, ArenaBattleJudgeActionForm
 from llm_arena.exceptions import ArenaBattleMissingHumanVoteException
 from llm_arena.models import (
@@ -13,6 +14,7 @@ from llm_arena.models import (
     ArenaBattle,
     ArenaTurn,
     BattleResponse,
+    BattleResponseImprovement,
     BattleVote,
     LLMJudgeVote,
     LLMModel,
@@ -77,8 +79,8 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(
             response.data["turns"][0]["responses"],
             [
-                {"slot": "A", "response_text": "A1"},
-                {"slot": "B", "response_text": "B1"},
+                {"slot": "A", "response_text": "A1", "improvement_text": None},
+                {"slot": "B", "response_text": "B1", "improvement_text": None},
             ],
         )
 
@@ -163,9 +165,498 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(
             vote_response.data["turns"][0]["responses"],
             [
-                {"slot": "A", "response_text": "A1", "is_winner": True},
-                {"slot": "B", "response_text": "B1", "is_winner": False},
+                {"slot": "A", "response_text": "A1", "improvement_text": None, "is_winner": True},
+                {"slot": "B", "response_text": "B1", "improvement_text": None, "is_winner": False},
             ],
+        )
+
+    def test_update_experimental_response_returns_full_battle_snapshot(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Old A",
+            error_message="old error",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "  Edited A  "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(battle.id))
+        self.assertEqual(response.data["turns"][0]["responses"][0]["response_text"], "Old A")
+        self.assertEqual(response.data["turns"][0]["responses"][0]["improvement_text"], "Edited A")
+        persisted_response = BattleResponse.objects.get(turn=turn, slot=BattleResponse.ResponseSlot.A)
+        self.assertEqual(persisted_response.response_text, "Old A")
+        improvement = BattleResponseImprovement.objects.get(response=persisted_response)
+        self.assertEqual(improvement.improved_response_text, "Edited A")
+
+    def test_update_experimental_response_updates_existing_improvement(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        response = BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Original A",
+        )
+        BattleResponseImprovement.objects.create(
+            response=response,
+            improved_response_text="First improvement",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+
+        patch_response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Updated improvement"},
+            format="json",
+        )
+
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(BattleResponseImprovement.objects.filter(response=response).count(), 1)
+        self.assertEqual(
+            BattleResponseImprovement.objects.get(response=response).improved_response_text,
+            "Updated improvement",
+        )
+
+    def test_vote_response_includes_saved_improvement_text(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Original A",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Original B",
+        )
+
+        patch_response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Improved A"},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        vote_response = self.client.post(
+            reverse("arena-battle-vote-create", kwargs={"id": battle.id}),
+            {"choice": "A", "feedback": "A wins"},
+            format="json",
+        )
+
+        self.assertEqual(vote_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            vote_response.data["turns"][0]["responses"],
+            [
+                {
+                    "slot": "A",
+                    "response_text": "Original A",
+                    "improvement_text": "Improved A",
+                    "is_winner": True,
+                },
+                {
+                    "slot": "B",
+                    "response_text": "Original B",
+                    "improvement_text": None,
+                    "is_winner": False,
+                },
+            ],
+        )
+
+    def test_update_experimental_response_rejects_standard_battle(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+        )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_experimental_response_rejects_non_latest_turn(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn_one = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        turn_two = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=2,
+            prompt="Prompt 2",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        for turn, prefix in ((turn_one, "One"), (turn_two, "Two")):
+            BattleResponse.objects.create(
+                turn=turn,
+                slot=BattleResponse.ResponseSlot.A,
+                status=BattleResponse.ResponseStatus.COMPLETED,
+                response_text=f"{prefix} A",
+            )
+            BattleResponse.objects.create(
+                turn=turn,
+                slot=BattleResponse.ResponseSlot.B,
+                status=BattleResponse.ResponseStatus.COMPLETED,
+                response_text=f"{prefix} B",
+            )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_update_experimental_response_rejects_after_human_vote(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.COMPLETED,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+        BattleVote.objects.create(
+            battle=battle,
+            choice=BattleVote.VoteChoice.A,
+            feedback="locked",
+        )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_update_experimental_response_rejects_after_llm_judge_vote(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+        LLMJudgeVote.objects.create(
+            battle=battle,
+            judge_model=self.model_a,
+            choice=BattleVote.VoteChoice.B,
+            reasoning="judge locked",
+        )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_update_experimental_response_rejects_invalid_slot_and_missing_turn(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+
+        missing_turn_response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 9, "slot": "A"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+        invalid_slot_response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "C"},
+            ),
+            {"response_text": "Edited A"},
+            format="json",
+        )
+
+        self.assertEqual(missing_turn_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(invalid_slot_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_update_experimental_response_rejects_blank_text(self):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Prompt 1",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="A1",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="B1",
+        )
+
+        response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "   "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    def test_continue_battle_uses_original_response_in_history_after_improvement(self, mock_generate):
+        battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.AWAITING_VOTE,
+        )
+        ExperimentConfig.objects.create(
+            battle=battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        turn = ArenaTurn.objects.create(
+            battle=battle,
+            turn_number=1,
+            prompt="Turn one prompt",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Original A1",
+        )
+        BattleResponse.objects.create(
+            turn=turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Original B1",
+        )
+        update_response = self.client.patch(
+            reverse(
+                "arena-battle-response-update",
+                kwargs={"id": battle.id, "turn_number": 1, "slot": "A"},
+            ),
+            {"response_text": "Edited A1"},
+            format="json",
+        )
+
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        mock_generate.side_effect = [
+            self._response_details("A2"),
+            self._response_details("B2"),
+        ]
+
+        continue_response = self.client.post(
+            reverse("arena-battle-turn-create", kwargs={"id": battle.id}),
+            {"prompt": "Turn two prompt"},
+            format="json",
+        )
+
+        self.assertEqual(continue_response.status_code, status.HTTP_201_CREATED)
+        model_a_history = mock_generate.call_args_list[0].kwargs["history_messages"]
+        model_b_history = mock_generate.call_args_list[1].kwargs["history_messages"]
+        self.assertEqual(
+            [(message.role, message.content) for message in model_a_history],
+            [("user", "Turn one prompt"), ("assistant", "Original A1")],
+        )
+        self.assertEqual(
+            [(message.role, message.content) for message in model_b_history],
+            [("user", "Turn one prompt"), ("assistant", "Original B1")],
         )
 
     def test_leaderboard_counts_one_match_per_multi_turn_battle(self):
@@ -230,6 +721,87 @@ class ArenaApiTests(APITestCase):
             battle=battle,
             choice=BattleVote.VoteChoice.A,
             feedback="A wins",
+        )
+
+        leaderboard = LeaderboardService().get_leaderboard()
+        leaderboard_by_model_name = {
+            entry["model_name"]: entry
+            for entry in leaderboard
+        }
+
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["wins"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["losses"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["avg_total_tokens"], 12.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["avg_total_tokens"], 10.0)
+
+    def test_leaderboard_excludes_experimental_battles(self):
+        standard_battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.COMPLETED,
+        )
+        standard_turn = ArenaTurn.objects.create(
+            battle=standard_battle,
+            turn_number=1,
+            prompt="Standard prompt",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=standard_turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Standard A",
+            total_tokens=12,
+        )
+        BattleResponse.objects.create(
+            turn=standard_turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Standard B",
+            total_tokens=10,
+        )
+        BattleVote.objects.create(
+            battle=standard_battle,
+            choice=BattleVote.VoteChoice.A,
+            feedback="Standard win",
+        )
+
+        experimental_battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.COMPLETED,
+        )
+        ExperimentConfig.objects.create(
+            battle=experimental_battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        experimental_turn = ArenaTurn.objects.create(
+            battle=experimental_battle,
+            turn_number=1,
+            prompt="Experimental prompt",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=experimental_turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Experimental A",
+            total_tokens=100,
+        )
+        BattleResponse.objects.create(
+            turn=experimental_turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Experimental B",
+            total_tokens=90,
+        )
+        BattleVote.objects.create(
+            battle=experimental_battle,
+            choice=BattleVote.VoteChoice.B,
+            feedback="Experimental win",
         )
 
         leaderboard = LeaderboardService().get_leaderboard()

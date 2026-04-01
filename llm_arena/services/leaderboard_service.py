@@ -51,6 +51,7 @@ class LeaderboardService(AbstractService):
 
         votes = (
             BattleVote.objects
+            .filter(battle__experiment_config__isnull=True)
             .select_related("battle__model_a__provider", "battle__model_b__provider")
             .prefetch_related(
                 Prefetch(

@@ -236,6 +236,36 @@ class BattleResponse(TimestampedModel):
         """Return the fixed model assigned to this response slot."""
         return self.turn.battle.get_model_for_slot(self.slot)
 
+    @property
+    def improvement_text(self) -> str | None:
+        """
+        Return the saved user improvement text when one exists for this response.
+
+        Returns:
+            str | None: Saved improvement text or None.
+        """
+        try:
+            return self.improvement.improved_response_text
+        except BattleResponseImprovement.DoesNotExist:
+            return None
+
+
+class BattleResponseImprovement(TimestampedModel):
+    """Store one user-authored improvement for a generated battle response."""
+
+    response = models.OneToOneField(
+        BattleResponse,
+        on_delete=models.CASCADE,
+        related_name="improvement",
+    )
+    improved_response_text = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Improvement for {self.response}"
+
 
 class BattleVote(TimestampedModel):
     """Capture the user preference submitted for a completed battle."""

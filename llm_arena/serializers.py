@@ -11,9 +11,14 @@ class BattleTurnCreateRequestSerializer(serializers.Serializer):
     prompt = serializers.CharField()
 
 
+class BattleResponseUpdateRequestSerializer(serializers.Serializer):
+    response_text = serializers.CharField(allow_blank=False, trim_whitespace=True)
+
+
 class ArenaTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
+    improvement_text = serializers.CharField(allow_null=True)
 
 
 class ArenaTurnSerializer(serializers.Serializer):
@@ -45,6 +50,7 @@ class BattleVoteRevealModelSerializer(serializers.Serializer):
 class BattleVoteTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
+    improvement_text = serializers.CharField(allow_null=True)
     is_winner = serializers.BooleanField()
 
 

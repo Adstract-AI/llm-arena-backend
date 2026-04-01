@@ -91,6 +91,54 @@ class ArenaBattleNotContinuableException(LLMInferenceException):
     default_code = "arena_battle_not_continuable"
 
 
+class ArenaBattleTurnNotFoundException(LLMInferenceException):
+    """Raised when a battle turn number does not exist for the selected battle."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "Arena battle turn not found."
+    default_code = "arena_battle_turn_not_found"
+
+
+class ArenaBattleResponseNotFoundException(LLMInferenceException):
+    """Raised when a response slot does not exist for the selected battle turn."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "Arena battle response not found."
+    default_code = "arena_battle_response_not_found"
+
+
+class ArenaBattleResponseNotEditableException(LLMInferenceException):
+    """Raised when a response improvement cannot be saved in the current response state."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle response improvement cannot be saved."
+    default_code = "arena_battle_response_not_editable"
+
+
+class ArenaBattleResponseEditNotExperimentalException(LLMInferenceException):
+    """Raised when a response improvement is requested for a standard battle."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Only experimental arena battle responses can be improved."
+    default_code = "arena_battle_response_edit_not_experimental"
+
+
+class ArenaBattleResponseEditNotLatestTurnException(LLMInferenceException):
+    """Raised when a response improvement targets a non-latest completed turn."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Only responses from the latest completed turn can be improved."
+    default_code = "arena_battle_response_edit_not_latest_turn"
+
+
+class ArenaBattleResponseEditAfterVotingException(LLMInferenceException):
+    """Raised when a response improvement is requested after the battle has already been voted."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle responses cannot be improved after voting."
+    default_code = "arena_battle_response_edit_after_voting"
+
+
 class ActiveAgentPromptNotFoundException(LLMInferenceException):
     """Raised when an internal agent workflow has no active system prompt configured."""
 

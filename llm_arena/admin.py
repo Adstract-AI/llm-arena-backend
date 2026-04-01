@@ -247,6 +247,16 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
             },
         ),
         (
+            "Improvements",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "improvement_a",
+                    "improvement_b",
+                ),
+            },
+        ),
+        (
             "Diagnostics",
             {
                 "classes": ("collapse",),
@@ -260,6 +270,8 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
         "prompt",
         "answer_a",
         "answer_b",
+        "improvement_a",
+        "improvement_b",
         "error_message",
         "created_at",
     )
@@ -281,6 +293,23 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
         return self._get_response_text(obj, BattleResponse.ResponseSlot.B)
 
     answer_b.short_description = "answer B"
+
+    @staticmethod
+    def _get_response_improvement_text(obj: ArenaTurn, slot: str) -> str:
+        response = obj.responses.filter(slot=slot).first()
+        if response is None or not response.improvement_text:
+            return "-"
+        return response.improvement_text
+
+    def improvement_a(self, obj: ArenaTurn) -> str:
+        return self._get_response_improvement_text(obj, BattleResponse.ResponseSlot.A)
+
+    improvement_a.short_description = "improvement A"
+
+    def improvement_b(self, obj: ArenaTurn) -> str:
+        return self._get_response_improvement_text(obj, BattleResponse.ResponseSlot.B)
+
+    improvement_b.short_description = "improvement B"
 
 
 class ExperimentConfigInline(ReadOnlyInlineMixin, admin.StackedInline):
