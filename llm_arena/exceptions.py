@@ -89,3 +89,35 @@ class ArenaBattleNotContinuableException(LLMInferenceException):
     status_code = status.HTTP_409_CONFLICT
     default_detail = "Arena battle cannot continue."
     default_code = "arena_battle_not_continuable"
+
+
+class ActiveAgentPromptNotFoundException(LLMInferenceException):
+    """Raised when an internal agent workflow has no active system prompt configured."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    default_detail = "No active agent prompt is configured."
+    default_code = "active_agent_prompt_not_found"
+
+
+class ArenaBattleMissingHumanVoteException(LLMInferenceException):
+    """Raised when an LLM judge vote is requested for a battle without a human vote."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle must have a human vote before LLM judging."
+    default_code = "arena_battle_missing_human_vote"
+
+
+class ArenaBattleAlreadyHasJudgeVoteException(LLMInferenceException):
+    """Raised when an LLM judge vote already exists for a battle."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Arena battle already has an LLM judge vote."
+    default_code = "arena_battle_already_has_judge_vote"
+
+
+class LLMJudgeDecisionParseException(LLMInferenceException):
+    """Raised when the judge model output cannot be parsed into a valid decision."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    default_detail = "Failed to parse the LLM judge decision."
+    default_code = "llm_judge_decision_parse_failed"

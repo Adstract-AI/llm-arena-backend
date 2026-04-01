@@ -1,9 +1,26 @@
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ActionForm
 
 from experimental_llm_arena.models import ExperimentConfig
 from helpers.env_variables import ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
-from llm_arena.models import ArenaBattle, ArenaTurn, BattleResponse, BattleVote, LLMModel, LLMProvider
+from llm_arena.exceptions import (
+    ActiveAgentPromptNotFoundException,
+    ArenaBattleAlreadyHasJudgeVoteException,
+    ArenaBattleMissingHumanVoteException,
+    LLMInferenceException,
+)
+from llm_arena.models import (
+    AgentPrompt,
+    ArenaBattle,
+    ArenaTurn,
+    BattleResponse,
+    BattleVote,
+    LLMJudgeVote,
+    LLMModel,
+    LLMProvider,
+)
+from llm_arena.services.agent_service import AgentService
 
 
 PROVIDER_REQUIRED_API_KEYS = {
@@ -42,6 +59,30 @@ class LLMModelAdminForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+
+class ArenaBattleJudgeActionForm(ActionForm):
+    judge_model = forms.ModelChoiceField(
+        queryset=LLMModel.objects.none(),
+        required=False,
+        label="Judge model",
+    )
+
+    def __init__(self, *args, **kwargs):
+        """
+        Populate the judge-model choices with active arena models.
+
+        Args:
+            *args: Positional form arguments.
+            **kwargs: Keyword form arguments.
+        """
+        super().__init__(*args, **kwargs)
+        self.fields["judge_model"].queryset = (
+            LLMModel.objects
+            .select_related("provider")
+            .filter(is_active=True)
+            .order_by("name")
+        )
 
 
 class ReadOnlyAdminMixin:
@@ -143,6 +184,13 @@ class LLMModelAdmin(admin.ModelAdmin):
     )
     search_fields = ("name", "external_model_id", "description", "provider__name")
     actions = (make_models_active, make_models_inactive)
+
+
+@admin.register(AgentPrompt)
+class AgentPromptAdmin(admin.ModelAdmin):
+    list_display = ("name", "agent_type", "is_active", "updated_at")
+    list_filter = ("agent_type", "is_active")
+    search_fields = ("name", "system_prompt")
 
 
 class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
@@ -277,17 +325,93 @@ class BattleVoteInline(ReadOnlyInlineMixin, admin.StackedInline):
     model = BattleVote
     extra = 0
     can_delete = False
+    readonly_fields = ("choice", "feedback", "created_at")
+
+
+class LLMJudgeVoteInline(ReadOnlyInlineMixin, admin.StackedInline):
+    model = LLMJudgeVote
+    extra = 0
+    can_delete = False
+    readonly_fields = ("judge_model", "choice", "reasoning", "created_at")
+
 
 @admin.register(ArenaBattle)
 class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    agent_service = AgentService()
+    action_form = ArenaBattleJudgeActionForm
     list_display = ("id", "model_a", "model_b", "status", "created_at", "completed_at")
     list_filter = ("status", "model_a__provider", "model_b__provider")
     search_fields = ("id", "model_a__name", "model_b__name", "error_message")
     fields = ("model_a", "model_b", "status", "error_message", "completed_at", "created_at", "updated_at")
-    inlines = (ExperimentConfigInline, ArenaTurnInline, BattleVoteInline)
+    inlines = (ExperimentConfigInline, ArenaTurnInline, BattleVoteInline, LLMJudgeVoteInline)
+    actions = ("judge_selected_battles",)
 
     def has_add_permission(self, request) -> bool:
         return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        if obj is None:
+            return True
+        return super().has_change_permission(request, obj=obj)
+
+    @admin.action(description="Judge selected battles with selected model")
+    def judge_selected_battles(self, request, queryset):
+        judge_model = self._get_selected_judge_model(request)
+        if judge_model is None:
+            self.message_user(
+                request,
+                "Select an active judge model before running the judge action.",
+                level=messages.ERROR,
+            )
+            return
+
+        judged_count = 0
+        skipped_battles: dict[str, list[str]] = {}
+        failed_battles: dict[str, list[str]] = {}
+
+        for battle in queryset.order_by("created_at"):
+            try:
+                self.agent_service.judge_battle(
+                    battle_id=battle.id,
+                    judge_model=judge_model,
+                )
+                judged_count += 1
+            except (ArenaBattleMissingHumanVoteException, ArenaBattleAlreadyHasJudgeVoteException) as exc:
+                skipped_battles.setdefault(str(exc.detail), []).append(str(battle.id))
+            except (ActiveAgentPromptNotFoundException, LLMInferenceException) as exc:
+                failed_battles.setdefault(str(exc.detail), []).append(str(battle.id))
+
+        if judged_count:
+            self.message_user(
+                request,
+                f"Created {judged_count} LLM judge vote(s) using '{judge_model.name}'.",
+                level=messages.SUCCESS,
+            )
+        for reason, battle_ids in skipped_battles.items():
+            self.message_user(
+                request,
+                f"Skipped {len(battle_ids)} battle(s): {reason} ({', '.join(battle_ids)}).",
+                level=messages.WARNING,
+            )
+        for reason, battle_ids in failed_battles.items():
+            self.message_user(
+                request,
+                f"Failed to judge {len(battle_ids)} battle(s): {reason} ({', '.join(battle_ids)}).",
+                level=messages.ERROR,
+            )
+
+    @staticmethod
+    def _get_selected_judge_model(request) -> LLMModel | None:
+        judge_model_id = (request.POST.get("judge_model") or "").strip()
+        if not judge_model_id:
+            return None
+
+        return (
+            LLMModel.objects
+            .select_related("provider")
+            .filter(pk=judge_model_id, is_active=True)
+            .first()
+        )
 
     class Media:
         css = {"all": ("admin/css/compact_inline.css",)}

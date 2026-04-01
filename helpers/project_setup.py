@@ -87,6 +87,7 @@ def build_initial_setup_steps() -> list[Step]:
         ("Collecting static files", lambda: run_command(python_command() + ["collectstatic", "--noinput"])),
         ("Seeding LLM providers", lambda: run_command(python_command() + ["seed_llm_providers"])),
         ("Seeding LLM models", lambda: run_command(python_command() + ["seed_llm_models"])),
+        ("Seeding agent prompts", lambda: run_command(python_command() + ["seed_agent_prompts"])),
         (
             "Seeding experimental parameter sampling specs",
             lambda: run_command(python_command() + ["seed_experiment_sampling_specs"]),
@@ -102,7 +103,7 @@ def perform_initial_setup(auto_confirm: bool = False) -> bool:
     print("=" * 50)
     print(
         "This will apply migrations, collect static files, seed the catalog and "
-        "experimental sampling specs, and create the default admin user."
+        "agent prompts, experimental sampling specs, and create the default admin user."
     )
     print("=" * 50)
 

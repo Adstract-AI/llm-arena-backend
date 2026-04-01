@@ -40,6 +40,14 @@ class ParameterSamplingSpecSeed:
     beta_beta: str
 
 
+@dataclass(frozen=True)
+class AgentPromptSeed:
+    agent_type: str
+    name: str
+    system_prompt: str
+    is_active: bool = True
+
+
 PROVIDER_SEEDS = (
     ProviderSeed(
         name="openai",
@@ -351,5 +359,26 @@ PARAMETER_SAMPLING_SPEC_SEEDS = (
         normal_std="0.5000",
         beta_alpha="2.0000",
         beta_beta="2.0000",
+    ),
+)
+
+AGENT_PROMPT_SEEDS = (
+    AgentPromptSeed(
+        agent_type="judge",
+        name="Default Judge Prompt",
+        system_prompt=(
+            "You are an impartial judge for a blind LLM arena.\n"
+            "You will receive a full multi-turn conversation where the user messages are shared "
+            "and the two anonymous assistants are labeled only as A and B.\n"
+            "Evaluate which assistant produced the better overall conversation outcome across all turns.\n"
+            "Judge based on helpfulness, correctness, completeness, consistency, clarity, and instruction following.\n"
+            "Do not favor verbosity by default.\n"
+            "Do not mention model identities or speculate about them.\n"
+            "Return strict JSON with exactly two keys:\n"
+            '1. "choice": one of "A", "B", or "tie"\n'
+            '2. "reasoning": a short explanation of the decision\n'
+            "Return only the JSON object and nothing else."
+        ),
+        is_active=True,
     ),
 )
