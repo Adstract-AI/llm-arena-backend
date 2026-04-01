@@ -1,8 +1,9 @@
-import json
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from django.db import transaction
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field, field_validator
 
 from common.abstract import AbstractService
 from llm_arena.exceptions import (
@@ -15,13 +16,46 @@ from llm_arena.exceptions import (
 )
 from llm_arena.models import AgentPrompt, ArenaBattle, BattleResponse, BattleVote, LLMJudgeVote, LLMModel
 from llm_arena.services.arena_service import ArenaService
-from llm_arena.services.inference_service import ArenaInferenceService
+from llm_arena.services.llm_chat_factory_service import LLMChatFactoryService
+
+
+class JudgeDecision(BaseModel):
+    """Typed structured output returned by the judge agent."""
+
+    choice: Literal["A", "B", "tie"] = Field(
+        description="Winning anonymous slot, or tie when neither side clearly wins.",
+    )
+    reasoning: str = Field(
+        min_length=1,
+        description="Short explanation of why that slot won or why the battle was a tie.",
+    )
+
+    @field_validator("reasoning")
+    @classmethod
+    def validate_reasoning(cls, value: str) -> str:
+        """
+        Normalize and validate the judge reasoning text.
+
+        Args:
+            value: Raw reasoning text returned by the judge model.
+
+        Returns:
+            str: Trimmed reasoning text.
+
+        Raises:
+            ValueError: If the reasoning is empty after trimming.
+        """
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError("Reasoning cannot be empty.")
+        return normalized_value
+
 
 class AgentService(AbstractService):
     """Run internal agent workflows such as LLM-based judging for arena battles."""
 
     arena_service = ArenaService()
-    inference_service = ArenaInferenceService()
+    llm_chat_factory_service = LLMChatFactoryService()
 
     def judge_battle(self, battle_id: UUID, judge_model: LLMModel) -> LLMJudgeVote:
         """
@@ -50,17 +84,16 @@ class AgentService(AbstractService):
         battle = self.arena_service.get_battle(battle_id)
         self._validate_judge_eligibility(battle)
         system_prompt = self.get_active_system_prompt(AgentPrompt.AgentType.JUDGE)
-        response_details = self.inference_service.generate_response_details(
+        decision = self._generate_judge_decision(
             model=judge_model,
             prompt=self._build_judge_prompt(battle),
             system_prompt=system_prompt,
         )
-        parsed_decision = self._parse_judge_response(response_details["response_text"])
         return self._persist_judge_vote(
             battle_id=battle.id,
             judge_model=judge_model,
-            choice=parsed_decision["choice"],
-            reasoning=parsed_decision["reasoning"],
+            choice=decision.choice,
+            reasoning=decision.reasoning,
         )
 
     def get_active_system_prompt(self, agent_type: str) -> str:
@@ -140,82 +173,51 @@ class AgentService(AbstractService):
 
         return "\n".join(transcript_lines)
 
-    def _parse_judge_response(self, response_text: str) -> dict[str, str]:
+    def _generate_judge_decision(
+            self,
+            model: LLMModel,
+            prompt: str,
+            system_prompt: str,
+    ) -> JudgeDecision:
         """
-        Parse the judge model output into a normalized battle decision payload.
+        Invoke the judge model and return a typed structured decision payload.
 
         Args:
-            response_text: Raw model text returned by the judge model.
+            model: Active LLM model acting as the judge.
+            prompt: Transcript-formatted user prompt for the judge.
+            system_prompt: Active system prompt for the judge workflow.
 
         Returns:
-            dict[str, str]: Parsed choice and reasoning values.
+            JudgeDecision: Typed judge decision returned through LangChain structured output.
 
         Raises:
-            LLMJudgeDecisionParseException: If the output is missing or invalid.
+            LLMJudgeDecisionParseException: If the judge output cannot be produced or validated.
         """
-        normalized_text = response_text.strip()
-        if not normalized_text:
-            raise LLMJudgeDecisionParseException(detail="The LLM judge returned an empty response.")
-
-        json_payload_text = self._extract_json_payload(normalized_text)
         try:
-            payload = json.loads(json_payload_text)
-        except json.JSONDecodeError as exc:
+            chat_model = self.llm_chat_factory_service.build_chat_model(
+                provider_name=model.provider_name,
+                model_name=model.external_model_id,
+            )
+            structured_model = chat_model.with_structured_output(JudgeDecision)
+            result = structured_model.invoke(
+                [SystemMessage(content=system_prompt.strip()),
+                 HumanMessage(content=prompt)]
+            )
+            return result
+        except LLMJudgeDecisionParseException:
+            raise
+        except Exception as exc:
             raise LLMJudgeDecisionParseException(
-                detail="The LLM judge did not return valid JSON."
+                detail=f"Failed to produce a structured judge decision with model '{model.name}'."
             ) from exc
-
-        choice = str(payload.get("choice", "")).strip()
-        reasoning = str(payload.get("reasoning", "")).strip()
-        if choice not in BattleVote.VoteChoice.values:
-            raise LLMJudgeDecisionParseException(
-                detail="The LLM judge returned an invalid choice."
-            )
-        if not reasoning:
-            raise LLMJudgeDecisionParseException(
-                detail="The LLM judge response is missing reasoning."
-            )
-
-        return {
-            "choice": choice,
-            "reasoning": reasoning,
-        }
-
-    @staticmethod
-    def _extract_json_payload(response_text: str) -> str:
-        """
-        Extract the JSON object payload from a raw judge-model response.
-
-        Args:
-            response_text: Raw judge-model text output.
-
-        Returns:
-            str: JSON substring ready for parsing.
-
-        Raises:
-            LLMJudgeDecisionParseException: If no JSON object can be found.
-        """
-        stripped_text = response_text.strip()
-        if stripped_text.startswith("```"):
-            stripped_text = stripped_text.split("\n", 1)[-1]
-            if stripped_text.endswith("```"):
-                stripped_text = stripped_text[:-3].strip()
-
-        start_index = stripped_text.find("{")
-        end_index = stripped_text.rfind("}")
-        if start_index == -1 or end_index == -1 or end_index < start_index:
-            raise LLMJudgeDecisionParseException(
-                detail="The LLM judge response did not contain a JSON object."
-            )
-        return stripped_text[start_index:end_index + 1]
 
     @transaction.atomic
     def _persist_judge_vote(
-        self,
-        battle_id: UUID,
-        judge_model: LLMModel,
-        choice: str,
-        reasoning: str,
+            self,
+            battle_id: UUID,
+            judge_model: LLMModel,
+            choice: str,
+            reasoning: str,
     ) -> LLMJudgeVote:
         """
         Persist one judge vote after revalidating battle eligibility under lock.

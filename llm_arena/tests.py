@@ -18,7 +18,7 @@ from llm_arena.models import (
     LLMModel,
     LLMProvider,
 )
-from llm_arena.services.agent_service import AgentService
+from llm_arena.services.agent_service import AgentService, JudgeDecision
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.leaderboard_service import LeaderboardService
 
@@ -292,8 +292,8 @@ class AgentServiceTests(APITestCase):
             is_active=True,
         )
 
-    @patch.object(AgentService.inference_service, "generate_response_details")
-    def test_judge_battle_persists_judge_vote_and_sends_full_transcript(self, mock_generate):
+    @patch.object(AgentService, "_generate_judge_decision")
+    def test_judge_battle_persists_judge_vote_and_sends_full_transcript(self, mock_generate_decision):
         battle = ArenaBattle.objects.create(
             model_a=self.model_a,
             model_b=self.model_b,
@@ -340,14 +340,10 @@ class AgentServiceTests(APITestCase):
             choice=BattleVote.VoteChoice.A,
             feedback="Human picked A.",
         )
-        mock_generate.return_value = {
-            "response_text": '{"choice": "B", "reasoning": "B stayed more consistent across both turns."}',
-            "finish_reason": "stop",
-            "prompt_tokens": 8,
-            "completion_tokens": 10,
-            "total_tokens": 18,
-            "raw_metadata": {"source": "test"},
-        }
+        mock_generate_decision.return_value = JudgeDecision(
+            choice="B",
+            reasoning="B stayed more consistent across both turns.",
+        )
 
         judge_vote = self.service.judge_battle(battle.id, self.judge_model)
 
@@ -356,11 +352,11 @@ class AgentServiceTests(APITestCase):
         self.assertEqual(judge_vote.judge_model, self.judge_model)
         self.assertTrue(LLMJudgeVote.objects.filter(battle=battle).exists())
         self.assertEqual(
-            mock_generate.call_args.kwargs["system_prompt"],
+            mock_generate_decision.call_args.kwargs["system_prompt"],
             "You are a strict arena judge.",
         )
-        self.assertEqual(mock_generate.call_args.kwargs["model"], self.judge_model)
-        prompt = mock_generate.call_args.kwargs["prompt"]
+        self.assertEqual(mock_generate_decision.call_args.kwargs["model"], self.judge_model)
+        prompt = mock_generate_decision.call_args.kwargs["prompt"]
         self.assertIn("Turn 1", prompt)
         self.assertIn("User Prompt: Explain friendship.", prompt)
         self.assertIn("Response A: A1", prompt)
