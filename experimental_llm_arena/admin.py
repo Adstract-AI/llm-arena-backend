@@ -17,6 +17,53 @@ class ParameterSamplingSpecAdmin(admin.ModelAdmin):
     )
     search_fields = ("parameter_name",)
     readonly_fields = ("parameter_name", "value_type")
+    fieldsets = (
+        (
+            "Identity",
+            {
+                "fields": (
+                    "parameter_name",
+                    "value_type",
+                ),
+            },
+        ),
+        (
+            "Allowed Range",
+            {
+                "fields": (
+                    "minimum_value",
+                    "maximum_value",
+                ),
+            },
+        ),
+        (
+            "Uniform Distribution",
+            {
+                "fields": (
+                    "uniform_min",
+                    "uniform_max",
+                ),
+            },
+        ),
+        (
+            "Normal Distribution",
+            {
+                "fields": (
+                    "normal_mean",
+                    "normal_std",
+                ),
+            },
+        ),
+        (
+            "Beta Distribution",
+            {
+                "fields": (
+                    "beta_alpha",
+                    "beta_beta",
+                ),
+            },
+        ),
+    )
 
     def has_add_permission(self, request) -> bool:
         return False

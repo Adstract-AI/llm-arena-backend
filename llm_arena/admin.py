@@ -184,6 +184,42 @@ class LLMModelAdmin(admin.ModelAdmin):
     )
     search_fields = ("name", "external_model_id", "description", "provider__name")
     actions = (make_models_active, make_models_inactive)
+    fieldsets = (
+        (
+            "Catalog",
+            {
+                "fields": (
+                    "provider",
+                    "name",
+                    "external_model_id",
+                    "description",
+                    "configuration",
+                ),
+            },
+        ),
+        (
+            "Availability",
+            {
+                "fields": (
+                    "is_active",
+                    "is_fine_tuned",
+                    "is_macedonian_optimized",
+                ),
+            },
+        ),
+        (
+            "Experimental Support",
+            {
+                "fields": (
+                    "supports_temperature",
+                    "supports_top_p",
+                    "supports_top_k",
+                    "supports_frequency_penalty",
+                    "supports_presence_penalty",
+                ),
+            },
+        ),
+    )
 
 
 @admin.register(AgentPrompt)
@@ -339,12 +375,37 @@ class LLMJudgeVoteInline(ReadOnlyInlineMixin, admin.StackedInline):
 class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     agent_service = AgentService()
     action_form = ArenaBattleJudgeActionForm
-    list_display = ("id", "model_a", "model_b", "status", "created_at", "completed_at")
+    list_display = (
+        "id",
+        "model_a",
+        "model_b",
+        "status",
+        "user_vote_choice",
+        "llm_judge_vote_choice",
+        "created_at",
+        "completed_at",
+    )
     list_filter = ("status", "model_a__provider", "model_b__provider")
     search_fields = ("id", "model_a__name", "model_b__name", "error_message")
     fields = ("model_a", "model_b", "status", "error_message", "completed_at", "created_at", "updated_at")
     inlines = (ExperimentConfigInline, ArenaTurnInline, BattleVoteInline, LLMJudgeVoteInline)
     actions = ("judge_selected_battles",)
+
+    def get_queryset(self, request):
+        """
+        Return the battle admin queryset with related vote rows preloaded.
+
+        Args:
+            request: Active admin request.
+
+        Returns:
+            QuerySet[ArenaBattle]: Battle queryset with related objects selected.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("vote", "llm_judge_vote")
+        )
 
     def has_add_permission(self, request) -> bool:
         return False
@@ -353,6 +414,38 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         if obj is None:
             return True
         return super().has_change_permission(request, obj=obj)
+
+    def user_vote_choice(self, obj: ArenaBattle) -> str:
+        """
+        Return the human vote choice shown in the battle changelist.
+
+        Args:
+            obj: Battle row rendered in admin.
+
+        Returns:
+            str: Stored human vote choice or a dash when absent.
+        """
+        vote = getattr(obj, "vote", None)
+        return vote.choice if vote is not None else "-"
+
+    user_vote_choice.short_description = "user vote"
+    user_vote_choice.admin_order_field = "vote__choice"
+
+    def llm_judge_vote_choice(self, obj: ArenaBattle) -> str:
+        """
+        Return the LLM judge vote choice shown in the battle changelist.
+
+        Args:
+            obj: Battle row rendered in admin.
+
+        Returns:
+            str: Stored LLM judge vote choice or a dash when absent.
+        """
+        vote = getattr(obj, "llm_judge_vote", None)
+        return vote.choice if vote is not None else "-"
+
+    llm_judge_vote_choice.short_description = "llm judge vote"
+    llm_judge_vote_choice.admin_order_field = "llm_judge_vote__choice"
 
     @admin.action(description="Judge selected battles with selected model")
     def judge_selected_battles(self, request, queryset):
@@ -415,3 +508,4 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 
     class Media:
         css = {"all": ("admin/css/compact_inline.css",)}
+        js = ("admin/js/arena_battle_actions.js",)
