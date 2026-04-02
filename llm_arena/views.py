@@ -10,6 +10,8 @@ from llm_arena.serializers import (
     BattleTurnCreateRequestSerializer,
     BattleVoteRequestSerializer,
     BattleVoteResponseSerializer,
+    ExperimentalArenaBattleSnapshotSerializer,
+    ExperimentalBattleVoteResponseSerializer,
     LeaderboardEntrySerializer,
     LLMModelDetailSerializer,
 )
@@ -73,7 +75,7 @@ class ArenaBattleResponseUpdateView(ServiceView[ArenaService]):
             slot=kwargs["slot"],
             response_text=serializer.validated_data["response_text"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = ExperimentalArenaBattleSnapshotSerializer(
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)
@@ -108,7 +110,12 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
             feedback=serializer.validated_data.get("feedback", ""),
         )
         battle = self.service.get_battle(battle_id)
-        response_serializer = BattleVoteResponseSerializer(
+        response_serializer_class = (
+            ExperimentalBattleVoteResponseSerializer
+            if self.service._get_experiment_config(battle) is not None
+            else BattleVoteResponseSerializer
+        )
+        response_serializer = response_serializer_class(
             self.service.build_vote_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)

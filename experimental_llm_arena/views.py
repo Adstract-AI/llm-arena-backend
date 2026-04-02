@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from common.abstract import ServiceView
 from experimental_llm_arena.serializers import ExperimentalBattleCreateRequestSerializer
 from experimental_llm_arena.services.experimental_arena_service import ExperimentalArenaService
-from llm_arena.serializers import ArenaBattleSnapshotSerializer
+from llm_arena.serializers import ExperimentalArenaBattleSnapshotSerializer
 
 
 class ExperimentalArenaBattleCreateView(ServiceView[ExperimentalArenaService], CreateAPIView):
@@ -24,8 +24,7 @@ class ExperimentalArenaBattleCreateView(ServiceView[ExperimentalArenaService], C
             share_values_across_models=serializer.validated_data.get("share_values_across_models"),
             parameters=serializer.validated_data["parameters"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = ExperimentalArenaBattleSnapshotSerializer(
             self.service.arena_service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-

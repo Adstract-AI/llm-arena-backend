@@ -18,7 +18,6 @@ class BattleResponseUpdateRequestSerializer(serializers.Serializer):
 class ArenaTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
-    improvement_text = serializers.CharField(allow_null=True)
 
 
 class ArenaTurnSerializer(serializers.Serializer):
@@ -32,6 +31,25 @@ class ArenaBattleSnapshotSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
     can_vote = serializers.BooleanField()
     turns = ArenaTurnSerializer(many=True)
+
+
+class ExperimentalArenaTurnResponseSerializer(serializers.Serializer):
+    slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
+    response_text = serializers.CharField()
+    improvement_text = serializers.CharField(allow_null=True)
+
+
+class ExperimentalArenaTurnSerializer(serializers.Serializer):
+    turn_number = serializers.IntegerField()
+    prompt = serializers.CharField()
+    responses = ExperimentalArenaTurnResponseSerializer(many=True)
+
+
+class ExperimentalArenaBattleSnapshotSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
+    can_vote = serializers.BooleanField()
+    turns = ExperimentalArenaTurnSerializer(many=True)
 
 
 class BattleVoteRequestSerializer(serializers.Serializer):
@@ -50,7 +68,6 @@ class BattleVoteRevealModelSerializer(serializers.Serializer):
 class BattleVoteTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
-    improvement_text = serializers.CharField(allow_null=True)
     is_winner = serializers.BooleanField()
 
 
@@ -97,6 +114,31 @@ class BattleVoteResponseSerializer(serializers.Serializer):
     winner_model_name = serializers.CharField(allow_null=True)
     models = BattleVoteRevealModelSerializer(many=True)
     turns = BattleVoteTurnSerializer(many=True)
+    experiment = BattleVoteExperimentSerializer(required=False, allow_null=True)
+
+
+class ExperimentalBattleVoteTurnResponseSerializer(serializers.Serializer):
+    slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
+    response_text = serializers.CharField()
+    improvement_text = serializers.CharField(allow_null=True)
+    is_winner = serializers.BooleanField()
+
+
+class ExperimentalBattleVoteTurnSerializer(serializers.Serializer):
+    turn_number = serializers.IntegerField()
+    prompt = serializers.CharField()
+    responses = ExperimentalBattleVoteTurnResponseSerializer(many=True)
+
+
+class ExperimentalBattleVoteResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=ArenaBattle.BattleStatus.choices)
+    choice = serializers.ChoiceField(choices=BattleVote.VoteChoice.choices)
+    feedback = serializers.CharField(allow_blank=True)
+    winner_provider_name = serializers.CharField(allow_null=True)
+    winner_model_name = serializers.CharField(allow_null=True)
+    models = BattleVoteRevealModelSerializer(many=True)
+    turns = ExperimentalBattleVoteTurnSerializer(many=True)
     experiment = BattleVoteExperimentSerializer(required=False, allow_null=True)
 
 

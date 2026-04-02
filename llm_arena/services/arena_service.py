@@ -313,6 +313,7 @@ class ArenaService(AbstractService):
         Returns:
             dict[str, Any]: Public battle snapshot without model identity reveal.
         """
+        include_improvement_text = self._get_experiment_config(battle) is not None
         return {
             "id": battle.id,
             "status": battle.status,
@@ -322,11 +323,13 @@ class ArenaService(AbstractService):
                     "turn_number": turn.turn_number,
                     "prompt": turn.prompt,
                     "responses": [
-                        {
+                        ({
                             "slot": response.slot,
                             "response_text": response.response_text,
-                            "improvement_text": response.improvement_text,
-                        }
+                        } | (
+                            {"improvement_text": response.improvement_text}
+                            if include_improvement_text else {}
+                        ))
                         for response in turn.responses.all()
                     ],
                 }
