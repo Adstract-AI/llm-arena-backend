@@ -165,8 +165,8 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(
             vote_response.data["turns"][0]["responses"],
             [
-                {"slot": "A", "response_text": "A1", "is_winner": True},
-                {"slot": "B", "response_text": "B1", "is_winner": False},
+                {"slot": "A", "response_text": "A1"},
+                {"slot": "B", "response_text": "B1"},
             ],
         )
 
@@ -323,13 +323,11 @@ class ArenaApiTests(APITestCase):
                     "slot": "A",
                     "response_text": "Original A",
                     "improvement_text": "Improved A",
-                    "is_winner": True,
                 },
                 {
                     "slot": "B",
                     "response_text": "Original B",
                     "improvement_text": None,
-                    "is_winner": False,
                 },
             ],
         )

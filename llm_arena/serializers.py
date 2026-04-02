@@ -68,7 +68,6 @@ class BattleVoteRevealModelSerializer(serializers.Serializer):
 class BattleVoteTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
-    is_winner = serializers.BooleanField()
 
 
 class BattleVoteTurnSerializer(serializers.Serializer):
@@ -114,14 +113,12 @@ class BattleVoteResponseSerializer(serializers.Serializer):
     winner_model_name = serializers.CharField(allow_null=True)
     models = BattleVoteRevealModelSerializer(many=True)
     turns = BattleVoteTurnSerializer(many=True)
-    experiment = BattleVoteExperimentSerializer(required=False, allow_null=True)
 
 
 class ExperimentalBattleVoteTurnResponseSerializer(serializers.Serializer):
     slot = serializers.ChoiceField(choices=BattleResponse.ResponseSlot.choices)
     response_text = serializers.CharField()
     improvement_text = serializers.CharField(allow_null=True)
-    is_winner = serializers.BooleanField()
 
 
 class ExperimentalBattleVoteTurnSerializer(serializers.Serializer):

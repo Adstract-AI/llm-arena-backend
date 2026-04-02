@@ -26,6 +26,14 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
     service_class = ArenaService
     serializer_class = BattleCreateRequestSerializer
 
+    @staticmethod
+    def _get_snapshot_serializer_class(battle, service: ArenaService):
+        return (
+            ExperimentalArenaBattleSnapshotSerializer
+            if service._get_experiment_config(battle) is not None
+            else ArenaBattleSnapshotSerializer
+        )
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -33,7 +41,7 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = self._get_snapshot_serializer_class(battle, self.service)(
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -53,7 +61,10 @@ class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
             battle_id=kwargs["id"],
             prompt=serializer.validated_data["prompt"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = ArenaBattleCreateView._get_snapshot_serializer_class(
+            battle,
+            self.service,
+        )(
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -89,7 +100,10 @@ class ArenaBattleDetailView(ServiceView[ArenaService], RetrieveAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         battle = self.service.get_battle(kwargs["id"])
-        serializer = self.get_serializer(self.service.build_battle_snapshot(battle))
+        serializer = ArenaBattleCreateView._get_snapshot_serializer_class(
+            battle,
+            self.service,
+        )(self.service.build_battle_snapshot(battle))
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

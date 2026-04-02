@@ -349,6 +349,7 @@ class ArenaService(AbstractService):
         """
         vote = battle.vote
         winner_model = self._get_winner_model(battle=battle, choice=vote.choice)
+        include_improvement_text = self._get_experiment_config(battle) is not None
         response_payload = {
             "id": battle.id,
             "status": battle.status,
@@ -373,12 +374,13 @@ class ArenaService(AbstractService):
                     "turn_number": turn.turn_number,
                     "prompt": turn.prompt,
                     "responses": [
-                        {
+                        ({
                             "slot": response.slot,
                             "response_text": response.response_text,
-                            "improvement_text": response.improvement_text,
-                            "is_winner": vote.choice != BattleVote.VoteChoice.TIE and response.slot == vote.choice,
-                        }
+                        } | (
+                            {"improvement_text": response.improvement_text}
+                            if include_improvement_text else {}
+                        ))
                         for response in turn.responses.all()
                     ],
                 }
