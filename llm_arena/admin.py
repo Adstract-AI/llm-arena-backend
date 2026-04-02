@@ -406,6 +406,7 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     action_form = ArenaBattleJudgeActionForm
     list_display = (
         "id",
+        "user",
         "model_a",
         "model_b",
         "status",
@@ -415,8 +416,8 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         "completed_at",
     )
     list_filter = ("status", "model_a__provider", "model_b__provider")
-    search_fields = ("id", "model_a__name", "model_b__name", "error_message")
-    fields = ("model_a", "model_b", "status", "error_message", "completed_at", "created_at", "updated_at")
+    search_fields = ("id", "user__email", "user__username", "model_a__name", "model_b__name", "error_message")
+    fields = ("user", "model_a", "model_b", "status", "error_message", "completed_at", "created_at", "updated_at")
     inlines = (ExperimentConfigInline, ArenaTurnInline, BattleVoteInline, LLMJudgeVoteInline)
     actions = ("judge_selected_battles",)
 

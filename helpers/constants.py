@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATABASE_MIGRATIONS_DIR = "migrations"
-DJANGO_APPS = ["common", "llm_arena", "chat", "experimental_llm_arena"]
+DJANGO_APPS = ["common", "accounts", "llm_arena", "chat", "experimental_llm_arena"]
 
 DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 DEFAULT_CORS_ALLOWED_ORIGINS: list[str] = []
@@ -20,6 +20,8 @@ DEFAULT_POSTGRES_PASSWORD = "llm_arena"
 DEFAULT_AUTO_START_SETUP = False
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 120
 DEFAULT_FINKI_BASE_URL = "https://pna.finki.ukim.mk/v1"
+DEFAULT_JWT_ACCESS_TOKEN_LIFETIME_MINUTES = 5
+DEFAULT_JWT_REFRESH_TOKEN_LIFETIME_DAYS = 1
 
 DEFAULT_TIME_ZONE = "Europe/Skopje"
 TRUE_ENV_VALUES = {"1", "true", "yes", "on"}

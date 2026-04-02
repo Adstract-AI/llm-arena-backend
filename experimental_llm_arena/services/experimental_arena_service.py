@@ -5,6 +5,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from accounts.services.auth_service import AuthService
 from common.abstract import AbstractService
 from experimental_llm_arena.exceptions import (
     ExperimentalArenaIncompatibleModelsException,
@@ -26,6 +27,7 @@ class ExperimentalArenaService(AbstractService):
 
     llm_model_service = LLMModelService()
     arena_service = ArenaService()
+    auth_service = AuthService()
 
     SAME_MODEL_MAX_RESAMPLES = 25
     FLOAT_QUANTIZER = Decimal("0.0001")
@@ -61,6 +63,9 @@ class ExperimentalArenaService(AbstractService):
             ExperimentalArenaMissingSamplingSpecException: If required sampling specs are missing.
             ExperimentalArenaSamplingException: If same-model slot sampling cannot create a real comparison.
         """
+        self.auth_service.require_authenticated_user(
+            detail="Authentication is required to create experimental battles."
+        )
         enabled_parameter_names = self._get_enabled_parameter_names(parameters)
         sampling_specs = self._get_sampling_specs(enabled_parameter_names)
         compatible_models = self._get_compatible_models(enabled_parameter_names)

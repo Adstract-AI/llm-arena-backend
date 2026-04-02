@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -9,9 +10,20 @@ from chat.models import ChatMessage, ChatSession
 from chat.services.chat_service import ChatService
 from llm_arena.models import LLMModel, LLMProvider
 
+User = get_user_model()
+
 
 class ChatApiTests(APITestCase):
     def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username="chat-user",
+            email="chat@example.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="other-chat-user",
+            email="other-chat@example.com",
+        )
+
         self.finki_provider = LLMProvider.objects.create(
             name="finki",
             display_name="FINKI",
@@ -56,6 +68,7 @@ class ChatApiTests(APITestCase):
 
         self.message_url = reverse("chat-message-create")
         self.models_url = reverse("chat-model-list")
+        self.client.force_authenticate(user=self.user)
 
     @patch.object(ChatService.inference_service, "generate_response_details_with_history")
     def test_first_message_creates_session_and_persists_messages(self, mock_generate_response_details):
@@ -80,6 +93,7 @@ class ChatApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         session = ChatSession.objects.get(id=response.data["session_id"])
+        self.assertEqual(session.user_id, self.user.id)
         self.assertEqual(session.llm_model_id, self.finki_model.id)
 
         persisted_messages = list(session.messages.order_by("created_at", "id"))
@@ -103,7 +117,7 @@ class ChatApiTests(APITestCase):
             "raw_metadata": {},
         }
 
-        session = ChatSession.objects.create(llm_model=self.finki_model)
+        session = ChatSession.objects.create(user=self.user, llm_model=self.finki_model)
         for index in range(25):
             role = (
                 ChatMessage.MessageRole.USER
@@ -136,7 +150,7 @@ class ChatApiTests(APITestCase):
         )
 
     def test_model_mismatch_returns_conflict(self):
-        session = ChatSession.objects.create(llm_model=self.finki_model)
+        session = ChatSession.objects.create(user=self.user, llm_model=self.finki_model)
 
         response = self.client.post(
             self.message_url,
@@ -177,6 +191,38 @@ class ChatApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_message_endpoint_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            self.message_url,
+            {
+                "provider_name": "finki",
+                "model_name": self.finki_model.name,
+                "message": "question",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_chat_session_is_owner_only(self):
+        session = ChatSession.objects.create(user=self.user, llm_model=self.finki_model)
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.post(
+            self.message_url,
+            {
+                "provider_name": "finki",
+                "model_name": self.finki_model.name,
+                "message": "question",
+                "session_id": str(session.id),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_models_endpoint_returns_only_active_finki_models(self):
         response = self.client.get(self.models_url)

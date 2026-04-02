@@ -5,6 +5,7 @@ from uuid import UUID
 from django.db import transaction
 from django.db.models import QuerySet
 
+from accounts.services.auth_service import AuthService
 from chat.exceptions import (
     ChatInferenceFailedException,
     ChatMessageValidationException,
@@ -30,6 +31,7 @@ class ChatService(AbstractService):
 
     llm_model_service = LLMModelService()
     inference_service = ArenaInferenceService()
+    auth_service = AuthService()
 
     def get_chat_supported_models(self) -> QuerySet[LLMModel]:
         """
@@ -71,13 +73,20 @@ class ChatService(AbstractService):
         """
         normalized_provider_name = self._normalize_provider_name(provider_name)
         normalized_message = self._normalize_message(message)
+        authenticated_user = self.auth_service.require_authenticated_user(
+            detail="Authentication is required to use chat sessions."
+        )
 
         llm_model = self.llm_model_service.get_model_by_name_for_provider(
             model_name=model_name,
             provider_name=normalized_provider_name,
             require_active=True,
         )
-        session = self._resolve_session(session_id=session_id, llm_model=llm_model)
+        session = self._resolve_session(
+            session_id=session_id,
+            llm_model=llm_model,
+            user=authenticated_user,
+        )
         history_messages = self._get_history_messages(
             session=session,
             limit=self.MEMORY_WINDOW_SIZE,
@@ -162,7 +171,7 @@ class ChatService(AbstractService):
             raise ChatMessageValidationException()
         return normalized_message
 
-    def _resolve_session(self, session_id: UUID | None, llm_model: LLMModel) -> ChatSession:
+    def _resolve_session(self, session_id: UUID | None, llm_model: LLMModel, user) -> ChatSession:
         """
         Resolve an existing session or create a new one for first-message requests.
 
@@ -178,7 +187,7 @@ class ChatService(AbstractService):
             ChatSessionModelMismatchException: If session model differs from request model.
         """
         if session_id is None:
-            return ChatSession.objects.create(llm_model=llm_model)
+            return ChatSession.objects.create(user=user, llm_model=llm_model)
 
         session = (
             ChatSession.objects
@@ -190,6 +199,10 @@ class ChatService(AbstractService):
             raise ChatSessionNotFoundException(
                 detail=f"Chat session '{session_id}' was not found."
             )
+        self.auth_service.validate_owned_resource_access(
+            owner_id=session.user_id,
+            resource_label=f"Chat session '{session_id}'",
+        )
 
         if session.llm_model_id != llm_model.id:
             raise ChatSessionModelMismatchException(

@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Max, Prefetch
 from django.utils import timezone
 
+from accounts.services.auth_service import AuthService
 from common.abstract import AbstractService
 from experimental_llm_arena.models import (
     EXPERIMENT_PARAMETER_CONFIG_MAP,
@@ -57,6 +58,7 @@ class ArenaService(AbstractService):
 
     llm_model_service = LLMModelService()
     inference_service = ArenaInferenceService()
+    auth_service = AuthService()
 
     def create_battle(self, prompt: str) -> ArenaBattle:
         """
@@ -101,6 +103,7 @@ class ArenaService(AbstractService):
         """
         normalized_prompt = self._normalize_prompt(prompt)
         battle = ArenaBattle.objects.create(
+            user=self.auth_service.get_optional_authenticated_user(),
             model_a=model_a,
             model_b=model_b,
             status=ArenaBattle.BattleStatus.IN_PROGRESS,
@@ -301,6 +304,7 @@ class ArenaService(AbstractService):
         )
         if battle is None:
             raise ArenaBattleNotFoundException()
+        self._validate_battle_access(battle)
         return battle
 
     def build_battle_snapshot(self, battle: ArenaBattle) -> dict[str, Any]:
@@ -541,7 +545,20 @@ class ArenaService(AbstractService):
         )
         if battle is None:
             raise ArenaBattleNotFoundException()
+        self._validate_battle_access(battle)
         return battle
+
+    def _validate_battle_access(self, battle: ArenaBattle) -> None:
+        """
+        Enforce owner-only access for battles that belong to a logged-in user.
+
+        Anonymous battles remain publicly accessible. Internal service calls that
+        do not carry a request user context bypass this check.
+        """
+        self.auth_service.validate_owned_resource_access(
+            owner_id=battle.user_id,
+            resource_label=f"battle '{battle.id}'",
+        )
 
     def _validate_battle_can_continue(self, battle: ArenaBattle) -> None:
         """

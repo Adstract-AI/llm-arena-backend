@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -81,6 +82,13 @@ class ArenaBattle(TimestampedModel):
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="arena_battles",
+        null=True,
+        blank=True,
+    )
     model_a = models.ForeignKey(
         LLMModel,
         on_delete=models.PROTECT,
@@ -102,6 +110,7 @@ class ArenaBattle(TimestampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
+            models.Index(fields=["user", "created_at"]),
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
         ]

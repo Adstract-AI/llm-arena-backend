@@ -1,5 +1,6 @@
 from rest_framework import status
 from rest_framework.generics import CreateAPIView, ListAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from chat.serializers import (
@@ -14,6 +15,7 @@ from common.abstract import ServiceView
 class FinkiModelListView(ServiceView[ChatService], ListAPIView):
     """Return active FINKI models that are available for non-battle chat."""
 
+    permission_classes = [AllowAny]
     service_class = ChatService
     serializer_class = FinkiModelSerializer
 
@@ -26,6 +28,7 @@ class FinkiModelListView(ServiceView[ChatService], ListAPIView):
 class ChatMessageCreateView(ServiceView[ChatService], CreateAPIView):
     """Create one chat turn by invoking a selected FINKI model with session memory."""
 
+    permission_classes = [IsAuthenticated]
     service_class = ChatService
     serializer_class = ChatMessageRequestSerializer
 

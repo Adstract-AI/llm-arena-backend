@@ -1,5 +1,6 @@
 from rest_framework import status
 from rest_framework.generics import CreateAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from common.abstract import ServiceView
@@ -11,6 +12,7 @@ from llm_arena.serializers import ExperimentalArenaBattleSnapshotSerializer
 class ExperimentalArenaBattleCreateView(ServiceView[ExperimentalArenaService], CreateAPIView):
     """Start a new experimental arena battle and return the anonymous transcript snapshot."""
 
+    permission_classes = [IsAuthenticated]
     service_class = ExperimentalArenaService
     serializer_class = ExperimentalBattleCreateRequestSerializer
 

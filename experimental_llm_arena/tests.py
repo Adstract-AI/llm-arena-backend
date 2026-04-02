@@ -1,6 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -14,9 +15,19 @@ from experimental_llm_arena.services.experimental_arena_service import Experimen
 from llm_arena.models import ArenaBattle, LLMModel, LLMProvider
 from llm_arena.services.arena_service import ArenaService
 
+User = get_user_model()
+
 
 class ExperimentalArenaApiTests(APITestCase):
     def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username="experimental-user",
+            email="experimental@example.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="experimental-other",
+            email="experimental-other@example.com",
+        )
         self.openai_provider = LLMProvider.objects.create(
             name="openai",
             display_name="OpenAI",
@@ -123,6 +134,7 @@ class ExperimentalArenaApiTests(APITestCase):
         )
 
         self.create_url = reverse("experimental-arena-battle-create")
+        self.client.force_authenticate(user=self.user)
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
     @patch.object(ExperimentalArenaService, "_sample_parameter_value")
@@ -165,6 +177,7 @@ class ExperimentalArenaApiTests(APITestCase):
 
         battle = ArenaBattle.objects.get(id=response.data["id"])
         experiment_config = battle.experiment_config
+        self.assertEqual(battle.user_id, self.user.id)
         self.assertEqual(battle.model_a_id, self.openai_model.id)
         self.assertEqual(battle.model_b_id, self.openai_model.id)
         self.assertEqual(experiment_config.model_mode, ExperimentConfig.ModelMode.SAME_MODEL)
@@ -316,6 +329,69 @@ class ExperimentalArenaApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_experimental_battle_create_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            self.create_url,
+            {
+                "prompt": "Explain friendship.",
+                "model_mode": "different_models",
+                "share_values_across_models": False,
+                "parameters": {
+                    "temperature": {"enabled": True, "distribution": "normal"},
+                    "top_p": {"enabled": False, "distribution": None},
+                    "top_k": {"enabled": False, "distribution": None},
+                    "frequency_penalty": {"enabled": False, "distribution": None},
+                    "presence_penalty": {"enabled": False, "distribution": None},
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ExperimentalArenaService, "_sample_parameter_value")
+    @patch.object(ExperimentalArenaService, "_select_models")
+    def test_experimental_battle_is_owner_only_for_follow_up_access(
+        self,
+        mock_select_models,
+        mock_sample_parameter_value,
+        mock_generate,
+    ) -> None:
+        mock_select_models.return_value = (self.openai_model, self.anthropic_model)
+        mock_sample_parameter_value.return_value = Decimal("0.7000")
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+
+        create_response = self.client.post(
+            self.create_url,
+            {
+                "prompt": "Prompt for ownership",
+                "model_mode": "different_models",
+                "share_values_across_models": True,
+                "parameters": {
+                    "temperature": {"enabled": True, "distribution": "beta"},
+                    "top_p": {"enabled": False, "distribution": None},
+                    "top_k": {"enabled": False, "distribution": None},
+                    "frequency_penalty": {"enabled": False, "distribution": None},
+                    "presence_penalty": {"enabled": False, "distribution": None},
+                },
+            },
+            format="json",
+        )
+        battle_id = create_response.data["id"]
+
+        self.client.force_authenticate(user=self.other_user)
+        response = self.client.get(
+            reverse("arena-battle-detail", kwargs={"id": battle_id}),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def _response_details(response_text: str) -> dict:

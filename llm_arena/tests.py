@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib import admin
+from django.contrib.auth import get_user_model
 from django.test import RequestFactory
 from django.urls import reverse
 from rest_framework import status
@@ -24,9 +25,19 @@ from llm_arena.services.agent_service import AgentService, JudgeDecision
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.leaderboard_service import LeaderboardService
 
+User = get_user_model()
+
 
 class ArenaApiTests(APITestCase):
     def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username="arena-user",
+            email="arena@example.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="arena-other",
+            email="arena-other@example.com",
+        )
         self.openai_provider = LLMProvider.objects.create(
             name="openai",
             display_name="OpenAI",
@@ -171,7 +182,9 @@ class ArenaApiTests(APITestCase):
         )
 
     def test_update_experimental_response_returns_full_battle_snapshot(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -220,7 +233,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(improvement.improved_response_text, "Edited A")
 
     def test_update_experimental_response_updates_existing_improvement(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -270,7 +285,9 @@ class ArenaApiTests(APITestCase):
         )
 
     def test_vote_response_includes_saved_improvement_text(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -333,7 +350,9 @@ class ArenaApiTests(APITestCase):
         )
 
     def test_update_experimental_response_rejects_standard_battle(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -363,7 +382,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_update_experimental_response_rejects_non_latest_turn(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -411,7 +432,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_update_experimental_response_rejects_after_human_vote(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.COMPLETED,
@@ -457,7 +480,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_update_experimental_response_rejects_after_llm_judge_vote(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -504,7 +529,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_update_experimental_response_rejects_invalid_slot_and_missing_turn(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -554,7 +581,9 @@ class ArenaApiTests(APITestCase):
         self.assertEqual(invalid_slot_response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_update_experimental_response_rejects_blank_text(self):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -596,7 +625,9 @@ class ArenaApiTests(APITestCase):
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
     def test_continue_battle_uses_original_response_in_history_after_improvement(self, mock_generate):
+        self.client.force_authenticate(user=self.user)
         battle = ArenaBattle.objects.create(
+            user=self.user,
             model_a=self.model_a,
             model_b=self.model_b,
             status=ArenaBattle.BattleStatus.AWAITING_VOTE,
@@ -656,6 +687,53 @@ class ArenaApiTests(APITestCase):
             [(message.role, message.content) for message in model_b_history],
             [("user", "Turn one prompt"), ("assistant", "Original B1")],
         )
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_owned_normal_battle_is_owner_only(self, mock_select_random_models, mock_generate):
+        self.client.force_authenticate(user=self.user)
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+
+        create_response = self.client.post(
+            self.create_url,
+            {"prompt": "Owned prompt"},
+            format="json",
+        )
+        battle_id = create_response.data["id"]
+
+        self.client.force_authenticate(user=self.other_user)
+        detail_response = self.client.get(
+            reverse("arena-battle-detail", kwargs={"id": battle_id}),
+        )
+
+        self.assertEqual(detail_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_anonymous_normal_battle_remains_accessible(self, mock_select_random_models, mock_generate):
+        self.client.force_authenticate(user=None)
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+        mock_generate.side_effect = [
+            self._response_details("A1"),
+            self._response_details("B1"),
+        ]
+
+        create_response = self.client.post(
+            self.create_url,
+            {"prompt": "Anonymous prompt"},
+            format="json",
+        )
+        battle_id = create_response.data["id"]
+
+        detail_response = self.client.get(
+            reverse("arena-battle-detail", kwargs={"id": battle_id}),
+        )
+
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
 
     def test_leaderboard_counts_one_match_per_multi_turn_battle(self):
         battle = ArenaBattle.objects.create(
