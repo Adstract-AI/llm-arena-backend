@@ -139,22 +139,36 @@ class ExperimentalBattleVoteResponseSerializer(serializers.Serializer):
     experiment = BattleVoteExperimentSerializer(required=False, allow_null=True)
 
 
-class LeaderboardEntrySerializer(serializers.Serializer):
-    model_name = serializers.CharField()
-    provider_name = serializers.CharField()
-    provider_display_name = serializers.CharField()
+class LeaderboardMetricsEntrySerializer(serializers.Serializer):
     matches = serializers.IntegerField()
     wins = serializers.IntegerField()
     losses = serializers.IntegerField()
     ties = serializers.IntegerField()
+    experimental_wins = serializers.IntegerField()
     win_rate = serializers.FloatField()
     non_tie_win_rate = serializers.FloatField(allow_null=True)
     elo_score = serializers.FloatField()
+
+
+class ExperimentalAveragesEntrySerializer(serializers.Serializer):
     avg_prompt_tokens = serializers.FloatField(allow_null=True)
     avg_completion_tokens = serializers.FloatField(allow_null=True)
     avg_total_tokens = serializers.FloatField(allow_null=True)
     avg_latency_ms = serializers.FloatField(allow_null=True)
     avg_response_length_chars = serializers.FloatField(allow_null=True)
+    avg_temperature = serializers.FloatField(allow_null=True)
+    avg_top_p = serializers.FloatField(allow_null=True)
+    avg_top_k = serializers.FloatField(allow_null=True)
+    avg_frequency_penalty = serializers.FloatField(allow_null=True)
+    avg_presence_penalty = serializers.FloatField(allow_null=True)
+
+
+class LeaderboardModelEntrySerializer(serializers.Serializer):
+    model_name = serializers.CharField()
+    provider_name = serializers.CharField()
+    provider_display_name = serializers.CharField()
+    metrics = LeaderboardMetricsEntrySerializer()
+    averages = ExperimentalAveragesEntrySerializer()
 
 
 class LLMModelDetailSerializer(serializers.Serializer):
@@ -166,15 +180,5 @@ class LLMModelDetailSerializer(serializers.Serializer):
     provider_description = serializers.CharField(allow_blank=True)
     is_fine_tuned = serializers.BooleanField()
     is_macedonian_optimized = serializers.BooleanField()
-    matches = serializers.IntegerField()
-    wins = serializers.IntegerField()
-    losses = serializers.IntegerField()
-    ties = serializers.IntegerField()
-    win_rate = serializers.FloatField()
-    non_tie_win_rate = serializers.FloatField(allow_null=True)
-    elo_score = serializers.FloatField()
-    avg_prompt_tokens = serializers.FloatField(allow_null=True)
-    avg_completion_tokens = serializers.FloatField(allow_null=True)
-    avg_total_tokens = serializers.FloatField(allow_null=True)
-    avg_latency_ms = serializers.FloatField(allow_null=True)
-    avg_response_length_chars = serializers.FloatField(allow_null=True)
+    metrics = LeaderboardMetricsEntrySerializer()
+    averages = ExperimentalAveragesEntrySerializer()

@@ -8,6 +8,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from experimental_llm_arena.models import ExperimentConfig
+from experimental_llm_arena.models import (
+    FrequencyPenaltyExperimentConfig,
+    PresencePenaltyExperimentConfig,
+    TemperatureExperimentConfig,
+    TopKExperimentConfig,
+    TopPExperimentConfig,
+)
 from llm_arena.admin import ArenaBattleAdmin, ArenaBattleJudgeActionForm
 from llm_arena.exceptions import ArenaBattleMissingHumanVoteException
 from llm_arena.models import (
@@ -65,6 +72,7 @@ class ArenaApiTests(APITestCase):
         )
 
         self.create_url = reverse("arena-battle-create")
+        self.leaderboard_url = reverse("arena-leaderboard-list")
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
     @patch.object(ArenaService, "_select_random_models")
@@ -805,12 +813,17 @@ class ArenaApiTests(APITestCase):
             for entry in leaderboard
         }
 
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["matches"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["matches"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["wins"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["losses"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["avg_total_tokens"], 12.0)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["avg_total_tokens"], 10.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["metrics"]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["wins"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["metrics"]["losses"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["experimental_wins"], 0)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["averages"]["avg_total_tokens"], 12.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["averages"]["avg_total_tokens"], 10.0)
+
+        response = self.client.get(self.leaderboard_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
 
     def test_leaderboard_excludes_experimental_battles(self):
         standard_battle = ArenaBattle.objects.create(
@@ -886,12 +899,98 @@ class ArenaApiTests(APITestCase):
             for entry in leaderboard
         }
 
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["matches"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["matches"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["wins"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["losses"], 1)
-        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["avg_total_tokens"], 12.0)
-        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["avg_total_tokens"], 10.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["metrics"]["matches"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["wins"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["metrics"]["losses"], 1)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["metrics"]["experimental_wins"], 0)
+        self.assertEqual(leaderboard_by_model_name[self.model_a.name]["averages"]["avg_total_tokens"], 12.0)
+        self.assertEqual(leaderboard_by_model_name[self.model_b.name]["averages"]["avg_total_tokens"], 10.0)
+
+    def test_leaderboard_includes_experimental_win_config_averages(self):
+        experimental_battle = ArenaBattle.objects.create(
+            model_a=self.model_a,
+            model_b=self.model_b,
+            status=ArenaBattle.BattleStatus.COMPLETED,
+        )
+        experiment_config = ExperimentConfig.objects.create(
+            battle=experimental_battle,
+            model_mode=ExperimentConfig.ModelMode.DIFFERENT_MODELS,
+            share_values_across_models=False,
+        )
+        TemperatureExperimentConfig.objects.create(
+            experiment_config=experiment_config,
+            distribution=ExperimentConfig.DistributionType.NORMAL,
+            value_a="0.5000",
+            value_b="0.9000",
+        )
+        TopPExperimentConfig.objects.create(
+            experiment_config=experiment_config,
+            distribution=ExperimentConfig.DistributionType.UNIFORM,
+            value_a="0.7000",
+            value_b="0.8000",
+        )
+        TopKExperimentConfig.objects.create(
+            experiment_config=experiment_config,
+            distribution=ExperimentConfig.DistributionType.BETA,
+            value_a=20,
+            value_b=40,
+        )
+        FrequencyPenaltyExperimentConfig.objects.create(
+            experiment_config=experiment_config,
+            distribution=ExperimentConfig.DistributionType.UNIFORM,
+            value_a="0.1000",
+            value_b="0.2000",
+        )
+        PresencePenaltyExperimentConfig.objects.create(
+            experiment_config=experiment_config,
+            distribution=ExperimentConfig.DistributionType.UNIFORM,
+            value_a="0.3000",
+            value_b="0.4000",
+        )
+        experimental_turn = ArenaTurn.objects.create(
+            battle=experimental_battle,
+            turn_number=1,
+            prompt="Experimental prompt",
+            status=ArenaTurn.TurnStatus.COMPLETED,
+        )
+        BattleResponse.objects.create(
+            turn=experimental_turn,
+            slot=BattleResponse.ResponseSlot.A,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Experimental A",
+        )
+        BattleResponse.objects.create(
+            turn=experimental_turn,
+            slot=BattleResponse.ResponseSlot.B,
+            status=BattleResponse.ResponseStatus.COMPLETED,
+            response_text="Experimental B",
+        )
+        BattleVote.objects.create(
+            battle=experimental_battle,
+            choice=BattleVote.VoteChoice.B,
+            feedback="Experimental B win",
+        )
+
+        response = self.client.get(self.leaderboard_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        entries_by_model_name = {
+            entry["model_name"]: entry
+            for entry in response.data
+        }
+        winning_entry = entries_by_model_name[self.model_b.name]
+        losing_entry = entries_by_model_name[self.model_a.name]
+
+        self.assertEqual(winning_entry["metrics"]["experimental_wins"], 1)
+        self.assertIsNone(winning_entry["averages"]["avg_prompt_tokens"])
+        self.assertEqual(winning_entry["averages"]["avg_temperature"], 0.9)
+        self.assertEqual(winning_entry["averages"]["avg_top_p"], 0.8)
+        self.assertEqual(winning_entry["averages"]["avg_top_k"], 40.0)
+        self.assertEqual(winning_entry["averages"]["avg_frequency_penalty"], 0.2)
+        self.assertEqual(winning_entry["averages"]["avg_presence_penalty"], 0.4)
+        self.assertEqual(losing_entry["metrics"]["experimental_wins"], 0)
+        self.assertIsNone(losing_entry["averages"]["avg_temperature"])
 
     @staticmethod
     def _response_details(response_text: str) -> dict:

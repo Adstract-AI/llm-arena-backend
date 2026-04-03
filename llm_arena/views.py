@@ -12,7 +12,7 @@ from llm_arena.serializers import (
     BattleVoteResponseSerializer,
     ExperimentalArenaBattleSnapshotSerializer,
     ExperimentalBattleVoteResponseSerializer,
-    LeaderboardEntrySerializer,
+    LeaderboardModelEntrySerializer,
     LLMModelDetailSerializer,
 )
 from llm_arena.services.arena_service import ArenaService
@@ -139,7 +139,7 @@ class LeaderboardListView(ServiceView[LeaderboardService], ListAPIView):
     """Return leaderboard statistics for all active arena models."""
 
     service_class = LeaderboardService
-    serializer_class = LeaderboardEntrySerializer
+    serializer_class = LeaderboardModelEntrySerializer
 
     def list(self, request, *args, **kwargs):
         leaderboard = self.service.get_leaderboard()
