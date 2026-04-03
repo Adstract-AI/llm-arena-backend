@@ -441,6 +441,7 @@ class ArenaService(AbstractService):
                 persisted_response.prompt_tokens = response_details["prompt_tokens"]
                 persisted_response.completion_tokens = response_details["completion_tokens"]
                 persisted_response.total_tokens = response_details["total_tokens"]
+                persisted_response.latency_ms = response_details.get("latency_ms")
                 persisted_response.raw_metadata = response_details["raw_metadata"]
                 persisted_response.save()
             except LLMInferenceException as exc:

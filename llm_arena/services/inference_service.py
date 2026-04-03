@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -121,7 +122,9 @@ class ArenaInferenceService(AbstractService):
                 prompt=normalized_prompt,
                 system_prompt=system_prompt,
             )
+            started_at = perf_counter()
             response = chat_model.invoke(messages)
+            latency_ms = round((perf_counter() - started_at) * 1000)
         except Exception as exc:
             raise LLMInferenceException(
                 detail=f"Inference failed for model '{runtime_model_name}'."
@@ -143,6 +146,7 @@ class ArenaInferenceService(AbstractService):
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),
             "total_tokens": usage.get("total_tokens"),
+            "latency_ms": latency_ms,
             "raw_metadata": {
                 "additional_kwargs": additional_kwargs,
                 "response_metadata": response_metadata,

@@ -260,7 +260,13 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
             "Diagnostics",
             {
                 "classes": ("collapse",),
-                "fields": ("error_message",),
+                "fields": (
+                    "error_message",
+                    "diagnostics_a",
+                    "diagnostics_b",
+                    "raw_metadata_a",
+                    "raw_metadata_b",
+                ),
             },
         ),
     )
@@ -273,6 +279,10 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
         "improvement_a",
         "improvement_b",
         "error_message",
+        "diagnostics_a",
+        "diagnostics_b",
+        "raw_metadata_a",
+        "raw_metadata_b",
         "created_at",
     )
 
@@ -310,6 +320,52 @@ class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):
         return self._get_response_improvement_text(obj, BattleResponse.ResponseSlot.B)
 
     improvement_b.short_description = "improvement B"
+
+    @staticmethod
+    def _get_response(obj: ArenaTurn, slot: str) -> BattleResponse | None:
+        return obj.responses.filter(slot=slot).first()
+
+    @classmethod
+    def _get_response_diagnostics(cls, obj: ArenaTurn, slot: str) -> str:
+        response = cls._get_response(obj, slot)
+        if response is None:
+            return "-"
+
+        return (
+            f"status={response.status}, "
+            f"finish_reason={response.finish_reason or '-'}, "
+            f"prompt_tokens={response.prompt_tokens if response.prompt_tokens is not None else '-'}, "
+            f"completion_tokens={response.completion_tokens if response.completion_tokens is not None else '-'}, "
+            f"total_tokens={response.total_tokens if response.total_tokens is not None else '-'}, "
+            f"latency_ms={response.latency_ms if response.latency_ms is not None else '-'}"
+        )
+
+    @classmethod
+    def _get_response_raw_metadata(cls, obj: ArenaTurn, slot: str):
+        response = cls._get_response(obj, slot)
+        if response is None or not response.raw_metadata:
+            return "-"
+        return response.raw_metadata
+
+    def diagnostics_a(self, obj: ArenaTurn) -> str:
+        return self._get_response_diagnostics(obj, BattleResponse.ResponseSlot.A)
+
+    diagnostics_a.short_description = "diagnostics A"
+
+    def diagnostics_b(self, obj: ArenaTurn) -> str:
+        return self._get_response_diagnostics(obj, BattleResponse.ResponseSlot.B)
+
+    diagnostics_b.short_description = "diagnostics B"
+
+    def raw_metadata_a(self, obj: ArenaTurn):
+        return self._get_response_raw_metadata(obj, BattleResponse.ResponseSlot.A)
+
+    raw_metadata_a.short_description = "raw metadata A"
+
+    def raw_metadata_b(self, obj: ArenaTurn):
+        return self._get_response_raw_metadata(obj, BattleResponse.ResponseSlot.B)
+
+    raw_metadata_b.short_description = "raw metadata B"
 
 
 class ExperimentConfigInline(ReadOnlyInlineMixin, admin.StackedInline):
