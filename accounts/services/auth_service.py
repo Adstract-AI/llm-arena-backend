@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.exceptions import (
     AuthenticationRequiredException,
+    InactiveUserException,
     OAuthCodeExchangeException,
     OAuthConfigurationException,
     OAuthEmailNotVerifiedException,
@@ -55,6 +56,8 @@ class AuthService(AbstractService):
             raise AuthenticationRequiredException(
                 detail=detail or "Authentication is required for this operation."
             )
+        if not getattr(self._user, "is_active", False):
+            raise InactiveUserException()
         return self._user
 
     def get_optional_authenticated_user(self):
@@ -66,7 +69,43 @@ class AuthService(AbstractService):
         """
         if self._user is None or not getattr(self._user, "is_authenticated", False):
             return None
+        if not getattr(self._user, "is_active", False):
+            return None
         return self._user
+
+    def anonymize_user(self, user) -> None:
+        """
+        Soft-delete a user by scrubbing identifying information and disabling access.
+
+        Args:
+            user: The user instance to anonymize.
+        """
+        user.username = f"deleted_user_{user.pk}"
+        user.email = f"deleted_user_{user.pk}@deleted.local"
+        user.first_name = "Deleted"
+        user.last_name = "User"
+        user.is_active = False
+        user.set_unusable_password()
+        user.save()
+
+        for oauth_account in user.oauth_accounts.all():
+            oauth_account.provider_user_id = f"deleted_oauth_{oauth_account.pk}"
+            oauth_account.email = f"deleted_oauth_{oauth_account.pk}@deleted.local"
+            oauth_account.email_verified = False
+            oauth_account.save(update_fields=["provider_user_id", "email", "email_verified", "updated_at"])
+
+    def delete_current_user(self) -> dict[str, str]:
+        """
+        Anonymize the currently authenticated user.
+
+        Returns:
+            dict[str, str]: Success payload for the API response.
+        """
+        user = self.require_authenticated_user(
+            detail="Authentication is required to delete your account."
+        )
+        self.anonymize_user(user)
+        return {"detail": "Your account was deleted successfully."}
 
     def validate_owned_resource_access(
         self,
@@ -157,7 +196,7 @@ class AuthService(AbstractService):
 
     def get_current_user_payload(self) -> dict[str, Any]:
         """Return the current authenticated user payload."""
-        user = self.user
+        user = self.require_authenticated_user()
         return self._serialize_user(user)
 
     def _validate_provider_configuration(

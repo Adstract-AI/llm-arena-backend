@@ -19,6 +19,14 @@ class AuthenticationRequiredException(AuthenticationException):
     default_code = "authentication_required"
 
 
+class InactiveUserException(AuthenticationException):
+    """Raised when an inactive or deleted user attempts to authenticate or act."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = "This account has been deleted or deactivated."
+    default_code = "inactive_user"
+
+
 class ResourceOwnershipException(AuthenticationException):
     """Raised when a user attempts to access another user's resource."""
 

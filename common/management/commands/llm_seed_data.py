@@ -168,7 +168,6 @@ MODEL_SEEDS = (
         description="Most capable Claude 4.6 model for deep reasoning, complex coding tasks, and high-judgment agent behavior.",
         supports_temperature=True,
         supports_top_p=True,
-        supports_top_k=True,
         configuration={
             "alias": "claude-opus-4-6",
             "source": "official_anthropic_api",
@@ -182,7 +181,6 @@ MODEL_SEEDS = (
         description="Balanced Claude 4.6 model that combines strong quality with better speed and efficiency than Opus.",
         supports_temperature=True,
         supports_top_p=True,
-        supports_top_k=True,
         configuration={
             "alias": "claude-sonnet-4-6",
             "source": "official_anthropic_api",
@@ -196,7 +194,6 @@ MODEL_SEEDS = (
         description="Fast Claude model intended for low-latency use cases while still offering strong general intelligence.",
         supports_temperature=True,
         supports_top_p=True,
-        supports_top_k=True,
         configuration={
             "alias": "claude-haiku-4-5",
             "source": "official_anthropic_api",

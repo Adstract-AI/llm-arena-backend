@@ -229,6 +229,96 @@ class AgentPromptAdmin(admin.ModelAdmin):
     list_display = ("name", "agent_type", "is_active", "updated_at")
     list_filter = ("agent_type", "is_active")
     search_fields = ("name", "system_prompt")
+    actions = ("delete_selected_agent_prompts",)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        if obj is None:
+            return True
+        return AgentPrompt.objects.filter(agent_type=obj.agent_type).count() > 1
+
+    def delete_model(self, request, obj):
+        if AgentPrompt.objects.filter(agent_type=obj.agent_type).count() <= 1:
+            self.message_user(
+                request,
+                f"Cannot delete the last prompt for agent type '{obj.agent_type}'.",
+                level=messages.ERROR,
+            )
+            return
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        blocked_agent_types = []
+        deletable_ids: list[int] = []
+
+        selected_counts_by_agent_type = {}
+        for prompt in queryset:
+            selected_counts_by_agent_type[prompt.agent_type] = (
+                selected_counts_by_agent_type.get(prompt.agent_type, 0) + 1
+            )
+
+        for agent_type, selected_count in selected_counts_by_agent_type.items():
+            total_count = AgentPrompt.objects.filter(agent_type=agent_type).count()
+            if total_count - selected_count <= 0:
+                blocked_agent_types.append(agent_type)
+
+        for prompt in queryset:
+            if prompt.agent_type not in blocked_agent_types:
+                deletable_ids.append(prompt.pk)
+
+        if blocked_agent_types:
+            blocked_summary = ", ".join(sorted(blocked_agent_types))
+            self.message_user(
+                request,
+                f"Cannot delete the last remaining prompt for agent type(s): {blocked_summary}.",
+                level=messages.ERROR,
+            )
+
+        if deletable_ids:
+            super().delete_queryset(
+                request,
+                queryset.filter(pk__in=deletable_ids),
+            )
+
+    @admin.action(description="Delete selected agent prompts")
+    def delete_selected_agent_prompts(self, request, queryset):
+        blocked_agent_types = []
+        deletable_ids: list[int] = []
+        selected_counts_by_agent_type: dict[str, int] = {}
+
+        for prompt in queryset:
+            selected_counts_by_agent_type[prompt.agent_type] = (
+                selected_counts_by_agent_type.get(prompt.agent_type, 0) + 1
+            )
+
+        for agent_type, selected_count in selected_counts_by_agent_type.items():
+            total_count = AgentPrompt.objects.filter(agent_type=agent_type).count()
+            if total_count - selected_count <= 0:
+                blocked_agent_types.append(agent_type)
+
+        for prompt in queryset:
+            if prompt.agent_type not in blocked_agent_types:
+                deletable_ids.append(prompt.pk)
+
+        if blocked_agent_types:
+            blocked_summary = ", ".join(sorted(blocked_agent_types))
+            self.message_user(
+                request,
+                f"Cannot delete the last remaining prompt for agent type(s): {blocked_summary}.",
+                level=messages.ERROR,
+            )
+
+        if deletable_ids:
+            deleted_count, _ = AgentPrompt.objects.filter(pk__in=deletable_ids).delete()
+            self.message_user(
+                request,
+                f"Successfully deleted {deleted_count} agent prompt(s).",
+                level=messages.SUCCESS,
+            )
 
 
 class ArenaTurnInline(ReadOnlyInlineMixin, admin.StackedInline):

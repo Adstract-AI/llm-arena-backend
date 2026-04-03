@@ -1,10 +1,12 @@
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, RetrieveAPIView
+from rest_framework.generics import CreateAPIView, DestroyAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.serializers import (
+    AccountDeleteResponseSerializer,
+    ActiveUserTokenRefreshSerializer,
     AuthenticatedUserSerializer,
     OAuthCodeRequestSerializer,
     OAuthLoginResponseSerializer,
@@ -59,5 +61,19 @@ class CurrentUserView(ServiceView[AuthService], RetrieveAPIView):
         return Response(self.get_serializer(payload).data, status=status.HTTP_200_OK)
 
 
+class DeleteCurrentUserView(ServiceView[AuthService], DestroyAPIView):
+    """Anonymize the currently authenticated user account."""
+
+    permission_classes = [IsAuthenticated]
+    service_class = AuthService
+    serializer_class = AccountDeleteResponseSerializer
+
+    def delete(self, request, *args, **kwargs):
+        payload = self.service.delete_current_user()
+        return Response(self.get_serializer(payload).data, status=status.HTTP_200_OK)
+
+
 class JWTTokenRefreshView(TokenRefreshView):
     """Refresh an access token using a refresh token."""
+
+    serializer_class = ActiveUserTokenRefreshSerializer
