@@ -195,8 +195,7 @@ class AgentService(AbstractService):
         """
         try:
             chat_model = self.llm_chat_factory_service.build_chat_model(
-                provider_name=model.provider_name,
-                model_name=model.external_model_id,
+                model=model,
             )
             structured_model = chat_model.with_structured_output(JudgeDecision)
             result = structured_model.invoke(

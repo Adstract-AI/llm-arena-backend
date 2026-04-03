@@ -113,8 +113,7 @@ class ArenaInferenceService(AbstractService):
         runtime_model_name = model.external_model_id
         try:
             chat_model = self.llm_chat_factory_service.build_chat_model(
-                provider_name=model.provider_name,
-                model_name=runtime_model_name,
+                model=model,
                 generation_config=generation_config,
             )
             messages = self._build_messages(
