@@ -1,0 +1,464 @@
+openapi: 3.0.1
+info:
+  title: experimental-llm-arena
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /api/experimental-arena/battles/:
+    post:
+      summary: start_experimental_battle
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                model_mode:
+                  type: string
+                  enum:
+                    - same_model
+                    - different_models
+                share_values_across_models:
+                  type: boolean
+                parameters:
+                  type: object
+                  properties:
+                    temperature:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        distribution:
+                          type: string
+                      required:
+                        - enabled
+                    top_p:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        distribution:
+                          type: string
+                      required:
+                        - enabled
+                    top_k:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        distribution:
+                          type: string
+                      required:
+                        - enabled
+                    frequency_penalty:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        distribution:
+                          type: string
+                      required:
+                        - enabled
+                    presence_penalty:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        distribution:
+                          type: string
+                      required:
+                        - enabled
+                  required:
+                    - temperature
+                    - top_p
+                    - top_k
+                    - frequency_penalty
+                    - presence_penalty
+              required:
+                - prompt
+                - model_mode
+                - share_values_across_models
+                - parameters
+            example:
+              prompt: Explain what friendship means.
+              model_mode: different_models
+              share_values_across_models: false
+              parameters:
+                temperature:
+                  enabled: true
+                  distribution: uniform
+                top_p:
+                  enabled: true
+                  distribution: uniform
+                top_k:
+                  enabled: false
+                  distribution: null
+                frequency_penalty:
+                  enabled: true
+                  distribution: normal
+                presence_penalty:
+                  enabled: true
+                  distribution: normal
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  can_vote:
+                    type: boolean
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
+                            required:
+                              - slot
+                              - response_text
+                              - improvement_text
+                required:
+                  - id
+                  - status
+                  - can_vote
+                  - turns
+              example:
+                id: 24e90a58-8234-4e8f-8be3-026f8f39b4cb
+                status: awaiting_vote
+                can_vote: true
+                turns:
+                  - turn_number: 1
+                    prompt: Explain what friendship means.
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Friendship is a relationship built on mutual care,
+                          trust, and choice.
+
+
+                          Unlike family, friendship is usually not something you
+                          are born into. It is something people create by
+                          choosing each other again and again. A friend is
+                          someone whose presence makes life more meaningful,
+                          more bearable, or more joyful.
+
+
+                          At its core, friendship often includes:
+
+
+                          - **Trust** — feeling safe sharing thoughts, feelings,
+                          or experiences
+
+                          - **Care** — genuinely wanting the other person to be
+                          well
+
+                          - **Mutuality** — both people matter, and both give in
+                          some way
+
+                          - **Acceptance** — being seen as you are, without
+                          constant judgment
+
+                          - **Support** — showing up in good times and bad
+
+                          - **Enjoyment** — liking each other’s company
+
+
+                          Friendship does not always look the same. Some friends
+                          are deeply intimate and know everything about you.
+                          Others are companions for certain parts of life—work,
+                          school, hobbies, or particular seasons. A friendship
+                          can be quiet, playful, serious, long-distance, or
+                          occasional, and still be real.
+
+
+                          Good friendship is not perfection. Friends can
+                          disagree, disappoint each other, or grow apart. What
+                          often matters is honesty, respect, and the willingness
+                          to repair when possible.
+
+
+                          In a deeper sense, friendship means: **“Your life
+                          matters to me, and I choose to be part of it.”**
+                        improvement_text: null
+                      - slot: B
+                        response_text: >-
+                          Friendship is a close, voluntary relationship between
+                          people built on mutual care, trust, and goodwill.
+
+
+                          At its core, friendship usually means:
+
+
+                          - **Enjoying each other’s company** — you like being
+                          around the person.
+
+                          - **Trust** — you feel safe sharing thoughts,
+                          feelings, or experiences.
+
+                          - **Support** — you help each other in good times and
+                          hard times.
+
+                          - **Respect** — you value each other as individuals.
+
+                          - **Reciprocity** — both people give and receive care,
+                          attention, and effort.
+
+
+                          Unlike relationships based mainly on duty, status, or
+                          advantage, friendship is usually chosen. A friend is
+                          someone who sees you as a person rather than just a
+                          role.
+
+
+                          Friendship can look different depending on the people
+                          involved:
+
+                          - some friends are deeply emotional and confiding,
+
+                          - some are playful and activity-based,
+
+                          - some stay close despite distance or time apart,
+
+                          - some are lifelong while others matter deeply for
+                          only one period of life.
+
+
+                          A good way to put it is: **friendship means freely
+                          choosing to care about another person’s well-being,
+                          and sharing part of life with them in a genuine way.**
+
+
+                          If you want, I can also explain:
+
+                          - friendship in a philosophical way,
+
+                          - the difference between friendship and love,
+
+                          - or what makes a healthy friendship.
+                        improvement_text: null
+          headers: {}
+      security:
+        - bearer: []
+  /api/arena/battles/BATTLE_ID/turns/1/responses/A/:
+    patch:
+      summary: give_response_improvement
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example:
+              response_text: >-
+                A stronger answer would explain friendship as trust, emotional
+                support, and long-term mutual care.
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  can_vote:
+                    type: boolean
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
+                            required:
+                              - slot
+                              - response_text
+                              - improvement_text
+                required:
+                  - id
+                  - status
+                  - can_vote
+                  - turns
+              example:
+                id: 77641d06-48a4-4b21-bf45-b4e42270f489
+                status: awaiting_vote
+                can_vote: true
+                turns:
+                  - turn_number: 1
+                    prompt: Explain what friendship means.
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Friendship is a close, voluntary relationship between
+                          people built on mutual care, trust, and respect.
+
+
+                          At its core, friendship usually means:
+
+
+                          - **Enjoying each other’s company** — liking to spend
+                          time together
+
+                          - **Trust** — feeling safe being honest and yourself
+
+                          - **Support** — helping each other through good times
+                          and bad
+
+                          - **Respect** — valuing each other’s feelings,
+                          boundaries, and differences
+
+                          - **Reciprocity** — both people give and receive,
+                          though not always equally at every moment
+
+
+                          A friend is often someone who:
+
+                          - listens to you,
+
+                          - celebrates your successes,
+
+                          - stands by you when things are hard,
+
+                          - tells you the truth kindly,
+
+                          - and accepts you without needing you to be perfect.
+
+
+                          Friendship does not mean never disagreeing. Good
+                          friendships can include conflict, distance, or change.
+                          What matters is whether there is care, effort, and
+                          honesty.
+
+
+                          In a deeper sense, friendship means choosing
+                          connection. Unlike family, which you are usually born
+                          into, friendship is often formed freely. That choice
+                          is part of what makes it meaningful.
+
+
+                          A simple way to say it:
+
+                          **Friendship is a bond between people who care about
+                          each other and choose to be part of each other’s
+                          lives.**
+
+
+                          If you want, I can also explain friendship from a
+                          **philosophical**, **psychological**, or **everyday
+                          life** perspective.
+                        improvement_text: >-
+                          aaaA stronger answer would explain friendship as
+                          trust, emotional support, and long-term mutual care.
+                      - slot: B
+                        response_text: >-
+                          Friendship is a close, voluntary relationship between
+                          people built on mutual care, trust, and goodwill.
+
+
+                          At its core, friendship usually means:
+
+
+                          - **Enjoying each other’s company** — wanting to spend
+                          time together.
+
+                          - **Trust** — feeling safe sharing thoughts, feelings,
+                          or experiences.
+
+                          - **Support** — being there in good times and bad.
+
+                          - **Respect** — accepting each other as individuals.
+
+                          - **Reciprocity** — both people give and receive care,
+                          attention, and effort.
+
+
+                          Friendship can look different depending on the people
+                          involved. Some friendships are deep and emotional,
+                          where people share everything. Others are lighter,
+                          based more on shared activities, humor, or common
+                          interests. A friendship doesn’t have to be constant to
+                          be real; sometimes it simply means knowing someone
+                          genuinely wishes you well.
+
+
+                          In a broader sense, friendship means choosing
+                          connection without obligation. Unlike family ties or
+                          formal roles, friendship is usually based on mutual
+                          affection and continued choice: both people keep
+                          showing up because they value one another.
+
+
+                          A simple way to put it:
+
+                          **Friendship is caring about someone, enjoying who
+                          they are, and being willing to stand beside them
+                          through life.**
+
+
+                          If you want, I can also explain friendship from a
+                          philosophical, psychological, or emotional
+                          perspective.
+                        improvement_text: null
+          headers: {}
+      security:
+        - bearer: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+servers: []
+security: []

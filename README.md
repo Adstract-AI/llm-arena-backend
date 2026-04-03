@@ -110,9 +110,11 @@ Important variables:
 
 ## API Endpoints
 
-For detailed endpoint specifications and descriptions, see the files in [api_docs](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs):
-- [llm-arena.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/llm-arena.openapi.yaml) for the arena endpoints
-- [chat.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/chat.openapi.yaml) for the chat endpoints
+For detailed endpoint specifications and descriptions, see the files in [api_docs](api_docs):
+- [auth.openapi.yaml](api_docs/auth.openapi.yaml) for authentication endpoints
+- [llm-arena.openapi.yaml](api_docs/llm-arena.openapi.yaml) for standard arena endpoints
+- [experimental-llm-arena.openapi.yaml](api_docs/experimental-llm-arena.openapi.yaml) for experimental arena endpoints
+- [chat.openapi.yaml](api_docs/chat.openapi.yaml) for chat endpoints
 
 ## Authentication
 
@@ -156,14 +158,14 @@ This service is responsible for:
 The backend is designed around blind comparison, multi-turn battle conversations, experimental parameterized evaluation, direct Vezilka chat and persistent storage of evaluation results.
 
 ## Local Compose Services
-The local [docker-compose.yml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/docker-compose.yml) in this folder starts only:
+The local [docker-compose.yml](docker-compose.yml) in this folder starts only:
 - `backend`
 - `db`
 
 This is useful when you want to run the frontend separately or connect an already running frontend to the backend API.
 
 ## Production Docker
-For a deployment-style backend image, use [Dockerfile.deployment](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/Dockerfile.deployment#L1).
+For a deployment-style backend image, use [Dockerfile.deployment](Dockerfile.deployment).
 
 It:
 - installs the backend dependencies
