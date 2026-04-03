@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.helpers import ActionForm
+from django.template.response import TemplateResponse
 
 from experimental_llm_arena.models import ExperimentConfig
 from helpers.env_variables import ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
@@ -535,6 +537,7 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 
     @admin.action(description="Judge selected battles with selected model")
     def judge_selected_battles(self, request, queryset):
+        self.agent_service.set_user(request.user)
         judge_model = self._get_selected_judge_model(request)
         if judge_model is None:
             self.message_user(
@@ -543,6 +546,28 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
                 level=messages.ERROR,
             )
             return
+
+        unvoted_battles = list(
+            queryset
+            .filter(vote__isnull=True)
+            .order_by("created_at")
+        )
+        confirmed_unvoted = request.POST.get("confirm_unvoted_judging") == "yes"
+        if unvoted_battles and not confirmed_unvoted:
+            context = {
+                **self.admin_site.each_context(request),
+                "title": "Confirm judging battles without a human vote",
+                "queryset": queryset.order_by("created_at"),
+                "unvoted_battles": unvoted_battles,
+                "judge_model": judge_model,
+                "action_checkbox_name": ACTION_CHECKBOX_NAME,
+                "action_name": "judge_selected_battles",
+            }
+            return TemplateResponse(
+                request,
+                "admin/llm_arena/arena_battle/judge_selected_confirmation.html",
+                context,
+            )
 
         judged_count = 0
         skipped_battles: dict[str, list[str]] = {}
@@ -553,6 +578,7 @@ class ArenaBattleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
                 self.agent_service.judge_battle(
                     battle_id=battle.id,
                     judge_model=judge_model,
+                    allow_without_human_vote=confirmed_unvoted,
                 )
                 judged_count += 1
             except (ArenaBattleMissingHumanVoteException, ArenaBattleAlreadyHasJudgeVoteException) as exc:

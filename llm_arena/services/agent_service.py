@@ -57,13 +57,19 @@ class AgentService(AbstractService):
     arena_service = ArenaService()
     llm_chat_factory_service = LLMChatFactoryService()
 
-    def judge_battle(self, battle_id: UUID, judge_model: LLMModel) -> LLMJudgeVote:
+    def judge_battle(
+        self,
+        battle_id: UUID,
+        judge_model: LLMModel,
+        allow_without_human_vote: bool = False,
+    ) -> LLMJudgeVote:
         """
         Run the judge agent against one battle transcript and persist the resulting judge vote.
 
         Args:
             battle_id: UUID primary key of the battle to judge.
             judge_model: Active LLM model that will evaluate the anonymous transcript.
+            allow_without_human_vote: When true, permit LLM judging for battles without a human vote.
 
         Returns:
             LLMJudgeVote: Persisted LLM judge vote for the selected battle.
@@ -82,7 +88,10 @@ class AgentService(AbstractService):
             )
 
         battle = self.arena_service.get_battle(battle_id)
-        self._validate_judge_eligibility(battle)
+        self._validate_judge_eligibility(
+            battle,
+            require_human_vote=not allow_without_human_vote,
+        )
         system_prompt = self.get_active_system_prompt(AgentPrompt.AgentType.JUDGE)
         decision = self._generate_judge_decision(
             model=judge_model,
@@ -94,6 +103,7 @@ class AgentService(AbstractService):
             judge_model=judge_model,
             choice=decision.choice,
             reasoning=decision.reasoning,
+            allow_without_human_vote=allow_without_human_vote,
         )
 
     def get_active_system_prompt(self, agent_type: str) -> str:
@@ -121,18 +131,23 @@ class AgentService(AbstractService):
             )
         return prompt.system_prompt
 
-    def _validate_judge_eligibility(self, battle: ArenaBattle) -> None:
+    def _validate_judge_eligibility(
+        self,
+        battle: ArenaBattle,
+        require_human_vote: bool = True,
+    ) -> None:
         """
         Validate that one battle may receive an LLM judge vote.
 
         Args:
             battle: Persisted battle to validate.
+            require_human_vote: When true, reject battles without a human vote.
 
         Raises:
             ArenaBattleMissingHumanVoteException: If the battle has no human vote.
             ArenaBattleAlreadyHasJudgeVoteException: If an LLM judge vote already exists.
         """
-        if not BattleVote.objects.filter(battle=battle).exists():
+        if require_human_vote and not BattleVote.objects.filter(battle=battle).exists():
             raise ArenaBattleMissingHumanVoteException(
                 detail=f"Battle '{battle.id}' must have a human vote before LLM judging."
             )
@@ -217,6 +232,7 @@ class AgentService(AbstractService):
             judge_model: LLMModel,
             choice: str,
             reasoning: str,
+            allow_without_human_vote: bool = False,
     ) -> LLMJudgeVote:
         """
         Persist one judge vote after revalidating battle eligibility under lock.
@@ -226,6 +242,7 @@ class AgentService(AbstractService):
             judge_model: Active model used as the judge.
             choice: Parsed winner choice.
             reasoning: Parsed judge reasoning text.
+            allow_without_human_vote: When true, permit judge persistence without a human vote.
 
         Returns:
             LLMJudgeVote: Persisted judge vote row.
@@ -244,7 +261,10 @@ class AgentService(AbstractService):
         if battle is None:
             raise ArenaBattleNotFoundException()
 
-        self._validate_judge_eligibility(battle)
+        self._validate_judge_eligibility(
+            battle,
+            require_human_vote=not allow_without_human_vote,
+        )
         return LLMJudgeVote.objects.create(
             battle=battle,
             judge_model=judge_model,

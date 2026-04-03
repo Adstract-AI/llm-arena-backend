@@ -97,7 +97,7 @@ class AuthService(AbstractService):
                 )
             return
 
-        if getattr(current_user, "is_superuser", False):
+        if getattr(current_user, "is_superuser", False) or getattr(current_user, "is_staff", False):
             return
 
         if owner_id != current_user.id:
