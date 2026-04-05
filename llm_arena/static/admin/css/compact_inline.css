@@ -1,3 +1,7 @@
 .inline-group .inline-related h3 {
   display: none !important;
 }
+
+.actions .judge-model-action-field {
+  margin-left: 20px;
+}

@@ -17,6 +17,7 @@ class ChatFinki(BaseChatModel):
     model_name: str
     base_url: str = FINKI_BASE_URL
     timeout_seconds: int = LLM_REQUEST_TIMEOUT_SECONDS
+    generation_config: dict[str, int | float] | None = None
 
     @property
     def _llm_type(self) -> str:
@@ -33,6 +34,8 @@ class ChatFinki(BaseChatModel):
             "model": self.model_name,
             "messages": [self._serialize_message(message) for message in messages],
         }
+        if self.generation_config:
+            payload.update(self.generation_config)
         if stop:
             payload["stop"] = stop
 

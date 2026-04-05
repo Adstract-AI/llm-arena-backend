@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -11,6 +12,11 @@ class ChatSession(TimestampedModel):
     """Persist one conversation thread bound to a single LLM model."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="chat_sessions",
+    )
     llm_model = models.ForeignKey(
         LLMModel,
         on_delete=models.PROTECT,
@@ -20,6 +26,7 @@ class ChatSession(TimestampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
+            models.Index(fields=["user", "created_at"], name="chat_session_user_created_idx"),
             models.Index(fields=["created_at"], name="chat_session_created_idx"),
         ]
 

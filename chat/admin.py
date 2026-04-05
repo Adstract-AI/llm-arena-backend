@@ -56,6 +56,7 @@ class ChatMessageInline(admin.StackedInline):
 class ChatSessionAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "user",
         "get_model_name",
         "get_provider_name",
         "message_count",
@@ -65,13 +66,15 @@ class ChatSessionAdmin(admin.ModelAdmin):
     list_filter = ("llm_model__provider", "llm_model", "created_at")
     search_fields = (
         "id",
+        "user__email",
+        "user__username",
         "llm_model__name",
         "llm_model__external_model_id",
         "llm_model__provider__name",
         "llm_model__provider__display_name",
     )
-    fields = ("llm_model", "created_at", "updated_at")
-    readonly_fields = ("llm_model", "created_at", "updated_at")
+    fields = ("user", "llm_model", "created_at", "updated_at")
+    readonly_fields = ("user", "llm_model", "created_at", "updated_at")
     inlines = (ChatMessageInline,)
 
     def has_add_permission(self, request) -> bool:

@@ -6,10 +6,13 @@ from common.abstract import ServiceView
 from llm_arena.serializers import (
     ArenaBattleSnapshotSerializer,
     BattleCreateRequestSerializer,
+    BattleResponseUpdateRequestSerializer,
     BattleTurnCreateRequestSerializer,
     BattleVoteRequestSerializer,
     BattleVoteResponseSerializer,
-    LeaderboardEntrySerializer,
+    ExperimentalArenaBattleSnapshotSerializer,
+    ExperimentalBattleVoteResponseSerializer,
+    LeaderboardModelEntrySerializer,
     LLMModelDetailSerializer,
 )
 from llm_arena.services.arena_service import ArenaService
@@ -23,6 +26,14 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
     service_class = ArenaService
     serializer_class = BattleCreateRequestSerializer
 
+    @staticmethod
+    def _get_snapshot_serializer_class(battle, service: ArenaService):
+        return (
+            ExperimentalArenaBattleSnapshotSerializer
+            if service._get_experiment_config(battle) is not None
+            else ArenaBattleSnapshotSerializer
+        )
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -30,7 +41,7 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = self._get_snapshot_serializer_class(battle, self.service)(
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -50,10 +61,35 @@ class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
             battle_id=kwargs["id"],
             prompt=serializer.validated_data["prompt"],
         )
-        response_serializer = ArenaBattleSnapshotSerializer(
+        response_serializer = ArenaBattleCreateView._get_snapshot_serializer_class(
+            battle,
+            self.service,
+        )(
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ArenaBattleResponseUpdateView(ServiceView[ArenaService]):
+    """Create or update one saved response improvement for an experimental battle."""
+
+    service_class = ArenaService
+    serializer_class = BattleResponseUpdateRequestSerializer
+
+    def patch(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        battle = self.service.update_experimental_response(
+            battle_id=kwargs["id"],
+            turn_number=kwargs["turn_number"],
+            slot=kwargs["slot"],
+            response_text=serializer.validated_data["response_text"],
+        )
+        response_serializer = ExperimentalArenaBattleSnapshotSerializer(
+            self.service.build_battle_snapshot(battle)
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
 class ArenaBattleDetailView(ServiceView[ArenaService], RetrieveAPIView):
@@ -64,7 +100,10 @@ class ArenaBattleDetailView(ServiceView[ArenaService], RetrieveAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         battle = self.service.get_battle(kwargs["id"])
-        serializer = self.get_serializer(self.service.build_battle_snapshot(battle))
+        serializer = ArenaBattleCreateView._get_snapshot_serializer_class(
+            battle,
+            self.service,
+        )(self.service.build_battle_snapshot(battle))
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -85,7 +124,12 @@ class ArenaBattleVoteCreateView(ServiceView[ArenaService], CreateAPIView):
             feedback=serializer.validated_data.get("feedback", ""),
         )
         battle = self.service.get_battle(battle_id)
-        response_serializer = BattleVoteResponseSerializer(
+        response_serializer_class = (
+            ExperimentalBattleVoteResponseSerializer
+            if self.service._get_experiment_config(battle) is not None
+            else BattleVoteResponseSerializer
+        )
+        response_serializer = response_serializer_class(
             self.service.build_vote_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)
@@ -95,7 +139,7 @@ class LeaderboardListView(ServiceView[LeaderboardService], ListAPIView):
     """Return leaderboard statistics for all active arena models."""
 
     service_class = LeaderboardService
-    serializer_class = LeaderboardEntrySerializer
+    serializer_class = LeaderboardModelEntrySerializer
 
     def list(self, request, *args, **kwargs):
         leaderboard = self.service.get_leaderboard()

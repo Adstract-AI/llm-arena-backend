@@ -1,0 +1,210 @@
+openapi: 3.0.1
+info:
+  title: auth
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /api/auth/github/:
+    post:
+      summary: login_from_github
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+              required:
+                - code
+            example:
+              code: 22317b60ac394b7f73c2
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+                  refresh:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      username:
+                        type: string
+                    required:
+                      - email
+                      - username
+                required:
+                  - access
+                  - refresh
+                  - user
+              example:
+                access: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1MTQ0MjE3LCJpYXQiOjE3NzUxNDM5MTcsImp0aSI6IjcyMGVkZjcxODA2NTQ5ZjQ5NTliODgwZmQ1ZGZhNzE4IiwidXNlcl9pZCI6Mn0.WLXc046bJaGWGo9iCBFi-AjL5L2MXE__8d_6g-hfbdY
+                refresh: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3NTIzMDMxNywiaWF0IjoxNzc1MTQzOTE3LCJqdGkiOiIxMmQ3NDEzMjRiMmM0MmY4YTViYzUyZDlmMzQ1MzZjMiIsInVzZXJfaWQiOjJ9.YBabBevQZaMFr1Ne7W8Tw4t6B20dvUuKyK0E1ycrFXA
+                user:
+                  email: user1@yahoo.com
+                  username: user1
+          headers: {}
+      security: []
+  /api/auth/google/:
+    post:
+      summary: login_from_google
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+              required:
+                - code
+            example:
+              code: 9ec321f04c6ac13c2790
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+                  refresh:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      username:
+                        type: string
+                    required:
+                      - email
+                      - username
+                required:
+                  - access
+                  - refresh
+                  - user
+              example:
+                access: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1MTQ0MjE3LCJpYXQiOjE3NzUxNDM5MTcsImp0aSI6IjcyMGVkZjcxODA2NTQ5ZjQ5NTliODgwZmQ1ZGZhNzE4IiwidXNlcl9pZCI6Mn0.WLXc046bJaGWGo9iCBFi-AjL5L2MXE__8d_6g-hfbdY
+                refresh: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3NTIzMDMxNywiaWF0IjoxNzc1MTQzOTE3LCJqdGkiOiIxMmQ3NDEzMjRiMmM0MmY4YTViYzUyZDlmMzQ1MzZjMiIsInVzZXJfaWQiOjJ9.YBabBevQZaMFr1Ne7W8Tw4t6B20dvUuKyK0E1ycrFXA
+                user:
+                  email: user1@yahoo.com
+                  username: user1
+          headers: {}
+      security: []
+  /api/auth/me/:
+    get:
+      summary: get_user_info
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                  username:
+                    type: string
+                required:
+                  - email
+                  - username
+              example:
+                email: user1@yahoo.com
+                username: user1
+          headers: {}
+      security:
+        - bearer: []
+  /api/auth/token/refresh/:
+    post:
+      summary: refresh_token
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+              required:
+                - refresh
+            example:
+              refresh: '{{JWT_REFRESH}}'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+                required:
+                  - access
+              example:
+                access: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1MTQ2MjkwLCJpYXQiOjE3NzUxNDU5MTUsImp0aSI6IjBlNTE5ZTI3NTIxOTQwYzM5ODMxNjc4ZGZiZDg2OWZmIiwidXNlcl9pZCI6Mn0.e7x_kuzwPcWkq1S9X6c3UmPU1JWq1TI3FPpAZhpqqkw
+          headers: {}
+      security: []
+  /api/auth/me/delete/:
+    delete:
+      summary: delete_user
+      deprecated: false
+      description: ''
+      tags: []
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+      security:
+        - bearer: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+servers: []
+security: []
