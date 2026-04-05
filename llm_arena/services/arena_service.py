@@ -1,5 +1,6 @@
 import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -8,17 +9,36 @@ from django.db import transaction
 from django.db.models import Max, Prefetch
 from django.utils import timezone
 
+from accounts.services.auth_service import AuthService
 from common.abstract import AbstractService
+from experimental_llm_arena.models import (
+    EXPERIMENT_PARAMETER_CONFIG_MAP,
+    ExperimentConfig,
+)
 from llm_arena.exceptions import (
     ArenaBattleAlreadyVotedException,
     ArenaBattleGenerationFailedException,
     ArenaBattleNotContinuableException,
     ArenaBattleNotFoundException,
     ArenaBattleNotReadyForVoteException,
+    ArenaBattleResponseEditAfterVotingException,
+    ArenaBattleResponseEditNotExperimentalException,
+    ArenaBattleResponseEditNotLatestTurnException,
+    ArenaBattleResponseNotEditableException,
+    ArenaBattleResponseNotFoundException,
+    ArenaBattleTurnNotFoundException,
     InsufficientActiveLLMModelsException,
     LLMInferenceException,
 )
-from llm_arena.models import ArenaBattle, ArenaTurn, BattleResponse, BattleVote, LLMModel
+from llm_arena.models import (
+    ArenaBattle,
+    ArenaTurn,
+    BattleResponse,
+    BattleResponseImprovement,
+    BattleVote,
+    LLMJudgeVote,
+    LLMModel,
+)
 from llm_arena.services.inference_service import ArenaInferenceService
 from llm_arena.services.llm_model_service import LLMModelService
 
@@ -38,6 +58,7 @@ class ArenaService(AbstractService):
 
     llm_model_service = LLMModelService()
     inference_service = ArenaInferenceService()
+    auth_service = AuthService()
 
     def create_battle(self, prompt: str) -> ArenaBattle:
         """
@@ -55,13 +76,42 @@ class ArenaService(AbstractService):
         """
         normalized_prompt = self._normalize_prompt(prompt)
         model_a, model_b = self._select_random_models()
+        return self.create_battle_with_models(
+            prompt=normalized_prompt,
+            model_a=model_a,
+            model_b=model_b,
+        )
+
+    def create_battle_with_models(
+        self,
+        prompt: str,
+        model_a: LLMModel,
+        model_b: LLMModel,
+        experiment_setup_callback: Callable[[ArenaBattle], None] | None = None,
+    ) -> ArenaBattle:
+        """
+        Create a new battle for explicitly selected models and run the first turn.
+
+        Args:
+            prompt: The initial user prompt for the conversation battle.
+            model_a: Fixed model assigned to slot A.
+            model_b: Fixed model assigned to slot B.
+            experiment_setup_callback: Optional callback that persists experiment configuration before generation.
+
+        Returns:
+            ArenaBattle: Persisted battle with its first completed turn.
+        """
+        normalized_prompt = self._normalize_prompt(prompt)
         battle = ArenaBattle.objects.create(
+            user=self.auth_service.get_optional_authenticated_user(),
             model_a=model_a,
             model_b=model_b,
             status=ArenaBattle.BattleStatus.IN_PROGRESS,
             error_message=None,
             completed_at=None,
         )
+        if experiment_setup_callback is not None:
+            experiment_setup_callback(battle)
 
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
         self._generate_turn(battle=battle, turn=turn)
@@ -93,6 +143,86 @@ class ArenaService(AbstractService):
 
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
         self._generate_turn(battle=battle, turn=turn)
+        return self.get_battle(battle.id)
+
+    @transaction.atomic
+    def update_experimental_response(
+        self,
+        battle_id: UUID,
+        turn_number: int,
+        slot: str,
+        response_text: str,
+    ) -> ArenaBattle:
+        """
+        Create or update one saved response improvement for the latest completed turn of an experimental battle.
+
+        Args:
+            battle_id: UUID primary key for the battle.
+            turn_number: Battle-local turn number containing the response to improve.
+            slot: Response slot identifier to improve.
+            response_text: User-authored improved response text.
+
+        Returns:
+            ArenaBattle: Battle snapshot source with the saved response improvement persisted.
+
+        Raises:
+            ArenaBattleNotFoundException: If the battle UUID does not exist.
+            ArenaBattleResponseEditNotExperimentalException: If the battle is not experimental.
+            ArenaBattleResponseEditAfterVotingException: If the battle already has a human or judge vote.
+            ArenaBattleTurnNotFoundException: If the turn does not exist for the selected battle.
+            ArenaBattleResponseEditNotLatestTurnException: If the target turn is not the latest completed turn.
+            ArenaBattleResponseNotFoundException: If the slot is invalid or the response row does not exist.
+            ArenaBattleResponseNotEditableException: If the response is not in a completed state.
+        """
+        normalized_response_text = response_text.strip()
+        battle = self._get_battle_for_update(battle_id)
+
+        if self._get_experiment_config(battle) is None:
+            raise ArenaBattleResponseEditNotExperimentalException()
+
+        if (
+            BattleVote.objects.filter(battle=battle).exists()
+            or LLMJudgeVote.objects.filter(battle=battle).exists()
+        ):
+            raise ArenaBattleResponseEditAfterVotingException()
+
+        target_turn = (
+            ArenaTurn.objects
+            .filter(battle=battle, turn_number=turn_number)
+            .first()
+        )
+        if target_turn is None:
+            raise ArenaBattleTurnNotFoundException()
+
+        latest_completed_turn_number = (
+            ArenaTurn.objects
+            .filter(
+                battle=battle,
+                status=ArenaTurn.TurnStatus.COMPLETED,
+            )
+            .aggregate(max_turn_number=Max("turn_number"))["max_turn_number"]
+        )
+        if latest_completed_turn_number != target_turn.turn_number:
+            raise ArenaBattleResponseEditNotLatestTurnException()
+
+        if slot not in BattleResponse.ResponseSlot.values:
+            raise ArenaBattleResponseNotFoundException()
+
+        target_response = (
+            BattleResponse.objects
+            .filter(turn=target_turn, slot=slot)
+            .first()
+        )
+        if target_response is None:
+            raise ArenaBattleResponseNotFoundException()
+
+        if target_response.status != BattleResponse.ResponseStatus.COMPLETED:
+            raise ArenaBattleResponseNotEditableException()
+
+        BattleResponseImprovement.objects.update_or_create(
+            response=target_response,
+            defaults={"improved_response_text": normalized_response_text},
+        )
         return self.get_battle(battle.id)
 
     @transaction.atomic
@@ -145,7 +275,16 @@ class ArenaService(AbstractService):
         """
         battle = (
             ArenaBattle.objects
-            .select_related("model_a__provider", "model_b__provider")
+            .select_related(
+                "model_a__provider",
+                "model_b__provider",
+                "experiment_config",
+                "experiment_config__temperature_config",
+                "experiment_config__top_p_config",
+                "experiment_config__top_k_config",
+                "experiment_config__frequency_penalty_config",
+                "experiment_config__presence_penalty_config",
+            )
             .prefetch_related(
                 Prefetch(
                     "turns",
@@ -154,7 +293,7 @@ class ArenaService(AbstractService):
                         .prefetch_related(
                             Prefetch(
                                 "responses",
-                                queryset=BattleResponse.objects.order_by("slot"),
+                                queryset=BattleResponse.objects.select_related("improvement").order_by("slot"),
                             )
                         )
                     ),
@@ -165,6 +304,7 @@ class ArenaService(AbstractService):
         )
         if battle is None:
             raise ArenaBattleNotFoundException()
+        self._validate_battle_access(battle)
         return battle
 
     def build_battle_snapshot(self, battle: ArenaBattle) -> dict[str, Any]:
@@ -177,6 +317,7 @@ class ArenaService(AbstractService):
         Returns:
             dict[str, Any]: Public battle snapshot without model identity reveal.
         """
+        include_improvement_text = self._get_experiment_config(battle) is not None
         return {
             "id": battle.id,
             "status": battle.status,
@@ -186,10 +327,13 @@ class ArenaService(AbstractService):
                     "turn_number": turn.turn_number,
                     "prompt": turn.prompt,
                     "responses": [
-                        {
+                        ({
                             "slot": response.slot,
                             "response_text": response.response_text,
-                        }
+                        } | (
+                            {"improvement_text": response.improvement_text}
+                            if include_improvement_text else {}
+                        ))
                         for response in turn.responses.all()
                     ],
                 }
@@ -209,8 +353,8 @@ class ArenaService(AbstractService):
         """
         vote = battle.vote
         winner_model = self._get_winner_model(battle=battle, choice=vote.choice)
-
-        return {
+        include_improvement_text = self._get_experiment_config(battle) is not None
+        response_payload = {
             "id": battle.id,
             "status": battle.status,
             "choice": vote.choice,
@@ -234,17 +378,25 @@ class ArenaService(AbstractService):
                     "turn_number": turn.turn_number,
                     "prompt": turn.prompt,
                     "responses": [
-                        {
+                        ({
                             "slot": response.slot,
                             "response_text": response.response_text,
-                            "is_winner": vote.choice != BattleVote.VoteChoice.TIE and response.slot == vote.choice,
-                        }
+                        } | (
+                            {"improvement_text": response.improvement_text}
+                            if include_improvement_text else {}
+                        ))
                         for response in turn.responses.all()
                     ],
                 }
                 for turn in battle.turns.all()
             ],
         }
+        experiment_payload = self._build_experiment_reveal_payload(
+            self._get_experiment_config(battle)
+        )
+        if experiment_payload is not None:
+            response_payload["experiment"] = experiment_payload
+        return response_payload
 
     def _generate_turn(self, battle: ArenaBattle, turn: ArenaTurn) -> None:
         """
@@ -272,10 +424,15 @@ class ArenaService(AbstractService):
             )
 
             try:
+                generation_config = self._get_slot_generation_config(
+                    battle=battle,
+                    slot=slot,
+                )
                 response_details = self.inference_service.generate_response_details_with_history(
                     model=llm_model,
                     history_messages=history_messages,
                     prompt=turn.prompt,
+                    generation_config=generation_config,
                 )
                 persisted_response.response_text = response_details["response_text"]
                 persisted_response.status = BattleResponse.ResponseStatus.COMPLETED
@@ -284,6 +441,7 @@ class ArenaService(AbstractService):
                 persisted_response.prompt_tokens = response_details["prompt_tokens"]
                 persisted_response.completion_tokens = response_details["completion_tokens"]
                 persisted_response.total_tokens = response_details["total_tokens"]
+                persisted_response.latency_ms = response_details.get("latency_ms")
                 persisted_response.raw_metadata = response_details["raw_metadata"]
                 persisted_response.save()
             except LLMInferenceException as exc:
@@ -388,7 +546,20 @@ class ArenaService(AbstractService):
         )
         if battle is None:
             raise ArenaBattleNotFoundException()
+        self._validate_battle_access(battle)
         return battle
+
+    def _validate_battle_access(self, battle: ArenaBattle) -> None:
+        """
+        Enforce owner-only access for battles that belong to a logged-in user.
+
+        Anonymous battles remain publicly accessible. Internal service calls that
+        do not carry a request user context bypass this check.
+        """
+        self.auth_service.validate_owned_resource_access(
+            owner_id=battle.user_id,
+            resource_label=f"battle '{battle.id}'",
+        )
 
     def _validate_battle_can_continue(self, battle: ArenaBattle) -> None:
         """
@@ -510,3 +681,136 @@ class ArenaService(AbstractService):
             "provider_display_name": model.provider.display_name,
             "is_winner": winning_slot != BattleVote.VoteChoice.TIE and slot == winning_slot,
         }
+
+    @staticmethod
+    def _get_slot_generation_config(
+        battle: ArenaBattle,
+        slot: str,
+    ) -> dict[str, int | float] | None:
+        """
+        Resolve the persisted runtime generation config for one battle slot.
+
+        Args:
+            battle: Battle whose experiment config may define runtime parameters.
+            slot: Slot whose generation config should be returned.
+
+        Returns:
+            dict[str, int | float] | None: Slot generation config or None for standard battles.
+        """
+        experiment_config = ArenaService._get_experiment_config(battle)
+        if experiment_config is None:
+            return None
+
+        slot_suffix = "a" if slot == BattleResponse.ResponseSlot.A else "b"
+        generation_config: dict[str, int | float] = {}
+        for parameter_name, parameter_config_map in EXPERIMENT_PARAMETER_CONFIG_MAP.items():
+            parameter_config = experiment_config.get_parameter_config(parameter_name)
+            if parameter_config is None:
+                continue
+            generation_config[parameter_name] = (
+                int(getattr(parameter_config, f"value_{slot_suffix}"))
+                if parameter_config_map["value_type"] == "int"
+                else float(getattr(parameter_config, f"value_{slot_suffix}"))
+            )
+
+        return generation_config or None
+
+    @staticmethod
+    def _build_experiment_reveal_payload(
+        experiment_config: ExperimentConfig | None,
+    ) -> dict[str, Any] | None:
+        """
+        Build the experimental reveal payload for vote responses.
+
+        Args:
+            experiment_config: Persisted experiment config for the battle, if present.
+
+        Returns:
+            dict[str, Any] | None: Serialized experimental reveal payload or None.
+        """
+        if experiment_config is None:
+            return None
+
+        return {
+            "model_mode": experiment_config.model_mode,
+            "share_values_across_models": experiment_config.share_values_across_models,
+            "parameters": {
+                parameter_name: ArenaService._build_parameter_reveal_payload(
+                    experiment_config=experiment_config,
+                    parameter_name=parameter_name,
+                    value_type=parameter_config_map["value_type"],
+                )
+                for parameter_name, parameter_config_map in EXPERIMENT_PARAMETER_CONFIG_MAP.items()
+            },
+        }
+
+    @staticmethod
+    def _serialize_decimal_value(value: Any) -> float | None:
+        """
+        Convert a stored decimal-like value into a float for response serialization.
+
+        Args:
+            value: Decimal-like sampled value.
+
+        Returns:
+            float | None: Serialized float or None when the sampled value is empty.
+        """
+        if value is None:
+            return None
+        return float(value)
+
+    @staticmethod
+    def _build_parameter_reveal_payload(
+        experiment_config: ExperimentConfig,
+        parameter_name: str,
+        value_type: str,
+    ) -> dict[str, Any]:
+        """
+        Build the reveal payload for one experimental parameter.
+
+        Args:
+            experiment_config: Persisted experiment config for the battle.
+            parameter_name: Parameter identifier to serialize.
+            value_type: Parameter value type identifier.
+
+        Returns:
+            dict[str, Any]: Reveal payload for one parameter.
+        """
+        parameter_config = experiment_config.get_parameter_config(parameter_name)
+        if parameter_config is None:
+            return {
+                "enabled": False,
+                "distribution": None,
+                "slot_a_value": None,
+                "slot_b_value": None,
+            }
+
+        if value_type == "int":
+            slot_a_value = parameter_config.value_a
+            slot_b_value = parameter_config.value_b
+        else:
+            slot_a_value = ArenaService._serialize_decimal_value(parameter_config.value_a)
+            slot_b_value = ArenaService._serialize_decimal_value(parameter_config.value_b)
+
+        return {
+            "enabled": True,
+            "distribution": parameter_config.distribution,
+            "slot_a_value": slot_a_value,
+            "slot_b_value": slot_b_value,
+        }
+
+    @staticmethod
+    def _get_experiment_config(battle: ArenaBattle) -> ExperimentConfig | None:
+        """
+        Safely return the experiment config linked to a battle when it exists.
+
+        Args:
+            battle: Battle whose linked experiment config should be retrieved.
+
+        Returns:
+            ExperimentConfig | None: Linked experiment config or None for standard battles.
+        """
+        try:
+            return battle.experiment_config
+        except ExperimentConfig.DoesNotExist:
+            return None

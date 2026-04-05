@@ -3,6 +3,7 @@ from django.urls import path
 from llm_arena.views import (
     ArenaBattleCreateView,
     ArenaBattleDetailView,
+    ArenaBattleResponseUpdateView,
     ArenaBattleTurnCreateView,
     ArenaBattleVoteCreateView,
     LeaderboardListView,
@@ -20,5 +21,10 @@ urlpatterns = [
     path("battles/", ArenaBattleCreateView.as_view(), name="arena-battle-create"),
     path("battles/<uuid:id>/", ArenaBattleDetailView.as_view(), name="arena-battle-detail"),
     path("battles/<uuid:id>/turns/", ArenaBattleTurnCreateView.as_view(), name="arena-battle-turn-create"),
+    path(
+        "battles/<uuid:id>/turns/<int:turn_number>/responses/<str:slot>/",
+        ArenaBattleResponseUpdateView.as_view(),
+        name="arena-battle-response-update",
+    ),
     path("battles/<uuid:id>/vote/", ArenaBattleVoteCreateView.as_view(), name="arena-battle-vote-create"),
 ]

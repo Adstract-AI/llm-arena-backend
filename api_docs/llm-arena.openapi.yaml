@@ -5,87 +5,6 @@ info:
   version: 1.0.0
 tags: []
 paths:
-  /api/chat/models/:
-    get:
-      summary: Chat - Get Models
-      deprecated: false
-      description: ''
-      tags: []
-      parameters: []
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-              example:
-                - name: vezilka-4b-it-fp16
-                  external_model_id: finki_ukim/vezilka:4b-it-fp16
-                  description: >-
-                    Macedonian instruction-tuned FINKI model exposed through the
-                    FINKI OpenAI-compatible endpoint.
-      security: []
-  /api/chat/messages/:
-    post:
-      summary: Chat - Send follow-up
-      deprecated: false
-      description: ''
-      tags: []
-      parameters:
-        - name: Content-Type
-          in: header
-          description: ''
-          required: false
-          example: application/json
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                provider_name:
-                  type: string
-                model_name:
-                  type: string
-                message:
-                  type: string
-                session_id:
-                  type: string
-              required:
-                - provider_name
-                - model_name
-                - message
-                - session_id
-            example:
-              provider_name: finki
-              model_name: vezilka-4b-it-fp16
-              message: Дали мислиш дека Македонија е убаво место?
-              session_id: '{{SESSION_ID}}'
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties: {}
-              example:
-                session_id: 0f8f5519-3e67-4cd5-8ae5-82cbd68ffaba
-                response_text: >-
-                  Македонија е позната по својата природна убавина, културно
-                  наследство и традиции. Има многу интересни локации и заштитени
-                  подрачја кои вреди да се посетат. Сепак, тоа е прашање на
-                  личен вкус. Некои луѓе можат да ја најдат убава и вредна за
-                  посета, додека други можат да имаат различни мислења.
-                model_name: vezilka-4b-it-fp16
-                provider_name: finki
-          headers: {}
-      security: []
   /api/arena/battles/:
     post:
       summary: start_battle
@@ -138,6 +57,9 @@ paths:
                                 type: string
                               response_text:
                                 type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
                             required:
                               - slot
                               - response_text
@@ -150,7 +72,7 @@ paths:
                 '1':
                   summary: Success
                   value:
-                    id: 4015110d-53b8-4fd6-86a0-5a3cf5517e28
+                    id: 050fc153-48a5-4318-ac35-5c4c7549cb36
                     status: awaiting_vote
                     can_vote: true
                     turns:
@@ -159,27 +81,29 @@ paths:
                         responses:
                           - slot: A
                             response_text: >-
-                              Во македонскиот јазик, пријателството е сфатено
-                              како сложен однос кој се гради врз доверба, почит
-                              и заеднички искуства. Пријателите се луѓе кои се
-                              поддржуваат, се разбираат и можат да се сметаат за
-                              доверливи. Тие споделуваат емоции, мисли и идеи,
-                              често се вклучуваат во активности заедно и можат
-                              да донесат радост или утеха во животот на едни со
-                              други. Пријателството не е само за да се има многу
-                              луѓе во животот, туку и за да се негуваат длабоки,
-                              значајни врски со неколку избрани поединци.
+                              Пријателството во македонскиот јазик може да се
+                              опише како врска на меѓусебно разбирање, поддршка
+                              и доверба меѓу две или повеќе личности. Тоа е
+                              состојба во која пријателите се тука еден за друг
+                              во добри и лоши времиња, нудејќи си емоционална,
+                              физичка и ментална поддршка. Пријателството може
+                              да се развие преку споделени искуства, заеднички
+                              интереси и вредности, и често се гради на
+                              комуникација, искреност и меѓусебна почит. Оваа
+                              концепција на пријателство ја нагласува важноста
+                              на човечките врски и значењето на луѓето кои ни го
+                              прават животот побогат и позначаен.
+                            improvement_text: null
                           - slot: B
                             response_text: >-
-                              Во македонскиот јазик, „пријателство“ означува
-                              блиска и доверлива врска меѓу луѓето. Тоа е врска
-                              основана на доверба, почит, поддршка и верност.
-                              Пријатели се луѓето со кои споделуваме радости и
-                              тешкотии, со кои имаме заеднички интереси и
-                              чувства. Во суштина, пријателството е една од
-                              најважните вредности во македонската култура,
-                              претставувајќи близок и долгогодишен однос кој ги
-                              збогатува животите на луѓето.
+                              Пријателството во македонскиот јазик значи
+                              „пријателство“ или „другарство“. Тоа е длабока и
+                              значајна врска меѓу две или повеќе лица која се
+                              гради на доверба, почит и заеднички искуства.
+                              Пријателите често се поддржуваат едни со други во
+                              добри и лоши моменти, нудат искрени совети и
+                              уживаат во меѓусебното друштво.
+                            improvement_text: null
           headers: {}
       security: []
   /api/arena/battles/BATTLE_ID/turns/:
@@ -230,6 +154,9 @@ paths:
                                 type: string
                               response_text:
                                 type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
                             required:
                               - slot
                               - response_text
@@ -243,7 +170,7 @@ paths:
                   - can_vote
                   - turns
               example:
-                id: c43b0c64-0d1b-4e1c-8917-296b8697edd8
+                id: 050fc153-48a5-4318-ac35-5c4c7549cb36
                 status: awaiting_vote
                 can_vote: true
                 turns:
@@ -252,68 +179,53 @@ paths:
                     responses:
                       - slot: A
                         response_text: >-
-                          Во македонскиот јазик, зборот за пријателство е
-                          „пријателство“ (преведено како „prijatelstvo“), а
-                          пријател е „пријател“ („prijatel“). Љубовта и односите
-                          што ги поврзуваат луѓето како пријатели се сметаат за
-                          важен дел од социјалниот живот и културата. 
-
-
-                          Пријателството во македонската култура означува
-                          длабока врска, доверба, меѓусебна поддршка и разбирање
-                          меѓу луѓето. Тоа е однос што се гради со време и се
-                          заснова на искреност, лојалност и заеднички вредности.
-                          Пријателите се важни за дадење емоционална поддршка,
-                          споделување на моменти, радости и тешкотии, како и за
-                          создавање чувство на припадност во заедницата.
+                          Пријателството во македонскиот јазик може да се опише
+                          како врска на меѓусебно разбирање, поддршка и доверба
+                          меѓу две или повеќе личности. Тоа е состојба во која
+                          пријателите се тука еден за друг во добри и лоши
+                          времиња, нудејќи си емоционална, физичка и ментална
+                          поддршка. Пријателството може да се развие преку
+                          споделени искуства, заеднички интереси и вредности, и
+                          често се гради на комуникација, искреност и меѓусебна
+                          почит. Оваа концепција на пријателство ја нагласува
+                          важноста на човечките врски и значењето на луѓето кои
+                          ни го прават животот побогат и позначаен.
+                        improvement_text: null
                       - slot: B
                         response_text: >-
-                          Пријателството во македонскиот јазик се однесува на
-                          врска која се гради врз доверба, почит и заеднички
-                          искуства. Тоа вклучува да се имаат меѓусебно доверба и
-                          поддршка, да се споделуваат чувства и да се биде тука
-                          еден за друг во добри и лоши моменти. Пријателите
-                          често се покрај нас во тешки времиња, ни помагаат да
-                          се справиме со стресот и предизвиците, и можат да
-                          донесат радост и смеа во нашите животи. Преку
-                          пријателството, можеме да стекнеме нови перспективи,
-                          да учиме едни од други и да се чувствуваме како да
-                          припаѓаме на нешто значајно.
+                          Пријателството во македонскиот јазик значи
+                          „пријателство“ или „другарство“. Тоа е длабока и
+                          значајна врска меѓу две или повеќе лица која се гради
+                          на доверба, почит и заеднички искуства. Пријателите
+                          често се поддржуваат едни со други во добри и лоши
+                          моменти, нудат искрени совети и уживаат во меѓусебното
+                          друштво.
+                        improvement_text: null
                   - turn_number: 2
                     prompt: Do you want to be friends?
                     responses:
                       - slot: A
                         response_text: >-
-                          Како вештачка интелигенција, немам чувствa или лични
-                          врски како пријателство, но тука сум за да ти
-                          помогнам, поддржам и да ти одговорам на сите прашања.
-                          Меѓутоа, со задоволство можам да ти бидам добар
-                          сојузник и пријател за информациите што ти се
-                          потребни!
+                          Како вештачка интелигенција, не можам да имам лични
+                          односи или пријателства на ист начин како луѓето.
+                          Сепак, секогаш сум тука да помогнам и да одговорам на
+                          прашања кои можеби ги имате! Дали има нешто конкретно
+                          во врска со тоа да се биде пријател со кое се
+                          прашувате?
+                        improvement_text: null
                       - slot: B
                         response_text: >-
-                          Како вештачка интелигенција, немам лични желби или
-                          пријателства. Сепак, јас сум секогаш тука да помогнам
-                          и да дадам корисни информации. Ако ти треба помош или
-                          имаш прашања, слободно прашај!
-                  - turn_number: 3
-                    prompt: Do you want to be friends?
-                    responses:
-                      - slot: A
-                        response_text: >-
-                          Јас како вештачка интелигенција немам чувства или
-                          лични врски, но со радост сум тука за тебе, да ти
-                          помогнам, да разговараме и да ти бидам поддршка. Ако
-                          имаш нешто што сакаш да споделиш или прашање што те
-                          интересира, слободно прашај!
-                      - slot: B
-                        response_text: >-
-                          Како асистент со вештачка интелигенција, немам лични
-                          преференции или пријателства. Сепак, тука сум да
-                          помогнам и да дадам корисни информации. Ако имате
-                          некои прашања или ви треба помош, слободно прашајте!
+                          Јас немам физички форма, но можам да посакам да бидам
+                          пријател со луѓе кои сакаат да бидат пријатели и да се
+                          вклучат во значајни интеракции со нив. Не можам да
+                          одредам дали некој е заинтересиран да биде мој
+                          пријател, бидејќи тоа бара взаемно разбирање и
+                          доверба. Сепак, можам да ви понудам поддршка и
+                          пријателство ако сакате.
+                        improvement_text: null
           headers: {}
-      security: []
+      security:
+        - bearer: []
   /api/arena/battles/BATTLE_ID/:
     get:
       summary: get_battle_details
@@ -353,6 +265,9 @@ paths:
                                 type: string
                               response_text:
                                 type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
                             required:
                               - slot
                               - response_text
@@ -366,7 +281,7 @@ paths:
                   - can_vote
                   - turns
               example:
-                id: 5e2ee76f-6c3c-449d-8ba6-e847549e2efc
+                id: 050fc153-48a5-4318-ac35-5c4c7549cb36
                 status: awaiting_vote
                 can_vote: true
                 turns:
@@ -375,54 +290,53 @@ paths:
                     responses:
                       - slot: A
                         response_text: >-
-                          Во македонскиот јазик, зборот за пријателство е
-                          „пријателство“ или „пријателство“. Тој означува блиска
-                          врска или сродство меѓу луѓе кои се чувствуваат
-                          пријатно и доверливо еден кон друг. Пријателството
-                          подразбира заемна поддршка, разбирање, верност и
-                          споделување на заеднички интереси и чувства. Тоа е
-                          вредност што го засилува социјалниот живот и создава
-                          трајни врски меѓу луѓето.
+                          Пријателството во македонскиот јазик може да се опише
+                          како врска на меѓусебно разбирање, поддршка и доверба
+                          меѓу две или повеќе личности. Тоа е состојба во која
+                          пријателите се тука еден за друг во добри и лоши
+                          времиња, нудејќи си емоционална, физичка и ментална
+                          поддршка. Пријателството може да се развие преку
+                          споделени искуства, заеднички интереси и вредности, и
+                          често се гради на комуникација, искреност и меѓусебна
+                          почит. Оваа концепција на пријателство ја нагласува
+                          важноста на човечките врски и значењето на луѓето кои
+                          ни го прават животот побогат и позначаен.
+                        improvement_text: null
                       - slot: B
                         response_text: >-
-                          Пријателството значи многу во македонскиот јазик и
-                          култура. Тоа претставува еден од највредните односи во
-                          животот на една личност, кој се гради на доверба,
-                          меѓусебно разбирање и поддршка. Пријателите се луѓе
-                          кои се тука еден за друг во добри и лоши времиња,
-                          нудат искрени совети и помош, и создаваат спомени кои
-                          траат цел живот. 
-
-
-                          Пријателството може да биде извор на радост и утеха,
-                          но и партнер во решавање на проблеми и споделување на
-                          лични искуства. Во македонската култура, традиционално
-                          се слави и негува, со многу обичаи и прослави кои ги
-                          обединуваат пријателите. 
-
-
-                          На крајот, пријателството е повеќе од само заедничко
-                          проживување; тоа е врска која го збогатува животот на
-                          секој човек и го прави пополн со љубов и разбирање.
+                          Пријателството во македонскиот јазик значи
+                          „пријателство“ или „другарство“. Тоа е длабока и
+                          значајна врска меѓу две или повеќе лица која се гради
+                          на доверба, почит и заеднички искуства. Пријателите
+                          често се поддржуваат едни со други во добри и лоши
+                          моменти, нудат искрени совети и уживаат во меѓусебното
+                          друштво.
+                        improvement_text: null
                   - turn_number: 2
                     prompt: Do you want to be friends?
                     responses:
                       - slot: A
                         response_text: >-
-                          Јас како вештачка интелигенција, нудејќи поддршка и
-                          разговори, можам да бидам твојот винамен асистент и
-                          пријател во она што ти треба. Ако сакаш, можеме да
-                          продолжиме да комуницираме и да се дружиме преку
-                          разговори!
+                          Како вештачка интелигенција, не можам да имам лични
+                          односи или пријателства на ист начин како луѓето.
+                          Сепак, секогаш сум тука да помогнам и да одговорам на
+                          прашања кои можеби ги имате! Дали има нешто конкретно
+                          во врска со тоа да се биде пријател со кое се
+                          прашувате?
+                        improvement_text: null
                       - slot: B
                         response_text: >-
-                          Како вештачка интелигенција, немам лични желби или
-                          чувства, но јас сум тука да помогнам и да обезбедам
-                          информации за пријателството. Ако имаш било какви
-                          прашања, потреби или ти треба помош поврзана со
-                          пријателството, слободно прашај!
+                          Јас немам физички форма, но можам да посакам да бидам
+                          пријател со луѓе кои сакаат да бидат пријатели и да се
+                          вклучат во значајни интеракции со нив. Не можам да
+                          одредам дали некој е заинтересиран да биде мој
+                          пријател, бидејќи тоа бара взаемно разбирање и
+                          доверба. Сепак, можам да ви понудам поддршка и
+                          пријателство ако сакате.
+                        improvement_text: null
           headers: {}
-      security: []
+      security:
+        - bearer: []
   /api/arena/battles/BATTLE_ID/vote/:
     post:
       summary: vote
@@ -457,6 +371,8 @@ paths:
                 properties:
                   id:
                     type: string
+                  status:
+                    type: string
                   choice:
                     type: string
                   feedback:
@@ -465,14 +381,12 @@ paths:
                     type: string
                   winner_model_name:
                     type: string
-                  responses:
+                  models:
                     type: array
                     items:
                       type: object
                       properties:
                         slot:
-                          type: string
-                        response_text:
                           type: string
                         model_name:
                           type: string
@@ -484,56 +398,266 @@ paths:
                           type: boolean
                       required:
                         - slot
-                        - response_text
                         - model_name
                         - provider_name
                         - provider_display_name
                         - is_winner
+                  turns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        turn_number:
+                          type: integer
+                        prompt:
+                          type: string
+                        responses:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              slot:
+                                type: string
+                              response_text:
+                                type: string
+                              improvement_text:
+                                type: string
+                                nullable: true
+                            required:
+                              - slot
+                              - response_text
+                      required:
+                        - turn_number
+                        - prompt
+                        - responses
+                  experiment:
+                    type: object
+                    properties:
+                      model_mode:
+                        type: string
+                      share_values_across_models:
+                        type: boolean
+                      parameters:
+                        type: object
+                        properties:
+                          temperature:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                              distribution:
+                                type: string
+                                nullable: true
+                              slot_a_value:
+                                type: number
+                                nullable: true
+                              slot_b_value:
+                                type: number
+                                nullable: true
+                            required:
+                              - enabled
+                              - distribution
+                              - slot_a_value
+                              - slot_b_value
+                          top_p:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                              distribution:
+                                type: string
+                                nullable: true
+                              slot_a_value:
+                                type: number
+                                nullable: true
+                              slot_b_value:
+                                type: number
+                                nullable: true
+                            required:
+                              - enabled
+                              - distribution
+                              - slot_a_value
+                              - slot_b_value
+                          top_k:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                              distribution:
+                                type: string
+                                nullable: true
+                              slot_a_value:
+                                type: integer
+                                nullable: true
+                              slot_b_value:
+                                type: integer
+                                nullable: true
+                            required:
+                              - enabled
+                              - distribution
+                              - slot_a_value
+                              - slot_b_value
+                          frequency_penalty:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                              distribution:
+                                type: string
+                                nullable: true
+                              slot_a_value:
+                                type: number
+                                nullable: true
+                              slot_b_value:
+                                type: number
+                                nullable: true
+                            required:
+                              - enabled
+                              - distribution
+                              - slot_a_value
+                              - slot_b_value
+                          presence_penalty:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                              distribution:
+                                type: string
+                                nullable: true
+                              slot_a_value:
+                                type: number
+                                nullable: true
+                              slot_b_value:
+                                type: number
+                                nullable: true
+                            required:
+                              - enabled
+                              - distribution
+                              - slot_a_value
+                              - slot_b_value
+                        required:
+                          - temperature
+                          - top_p
+                          - top_k
+                          - frequency_penalty
+                          - presence_penalty
+                    required:
+                      - model_mode
+                      - share_values_across_models
+                      - parameters
                 required:
                   - id
+                  - status
                   - choice
                   - feedback
                   - winner_provider_name
                   - winner_model_name
-                  - responses
+                  - models
+                  - turns
               example:
-                id: 62c2d9e5-f177-42d7-99a0-18b1905a0089
+                id: 4161f0e7-3de8-4747-a778-1deed2b1205c
+                status: completed
                 choice: A
-                feedback: Answer A was clearer and more natural.
+                feedback: Answer was clearer and more natural.
                 winner_provider_name: openai
-                winner_model_name: gpt-4.1-mini
-                responses:
+                winner_model_name: gpt-4.1
+                models:
                   - slot: A
-                    response_text: >-
-                      Пријателството во македонски значи особена врска помеѓу
-                      луѓе која се базира на меѓусебна доверба, почит и
-                      поддршка. Пријателите се оние на кои можеш да им се
-                      довериш, со нив да споделиш радости и тешкотии, и кои се
-                      покрај тебе во секој момент. Пријателството претставува
-                      емоционална блискост и взаемна грижа, која ја збогатува
-                      животната приказна и ја прави посмислена.
-                    model_name: gpt-4.1-mini
+                    model_name: gpt-4.1
                     provider_name: openai
                     provider_display_name: OpenAI
                     is_winner: true
                   - slot: B
-                    response_text: >-
-                      Пријателството значи многу во македонскиот јазик. Тоа е
-                      еден од највредните односи во животот, каде што две лица
-                      се зближуваат преку заеднички искуства, меѓусебна поддршка
-                      и разбирање. Пријателите се луѓе кои се тука еден за друг
-                      во добри и лоши времиња, и кои можат да споделат смеа,
-                      радост, како и да се соочат со предизвици заедно. Во
-                      македонската култура, пријателството често се изразува
-                      преку различни ритуали и традиции, како што се заеднички
-                      оброци, празнувања и активности. Тоа е сложен и динамичен
-                      процес кој бара посветеност и взаемност.
-                    model_name: vezilka-4b-it-fp16
-                    provider_name: finki
-                    provider_display_name: FINKI
+                    model_name: gpt-4.1
+                    provider_name: openai
+                    provider_display_name: OpenAI
                     is_winner: false
+                turns:
+                  - turn_number: 1
+                    prompt: Explain what friendship means.
+                    responses:
+                      - slot: A
+                        response_text: >-
+                          Friendship is a close and trusting relationship
+                          between people who care about and support each other.
+                          It is built on mutual respect, kindness, honesty, and
+                          understanding. True friends enjoy each other’s
+                          company, share both happy and difficult moments, and
+                          accept each other’s strengths and weaknesses.
+                          Friendship often involves helping, listening, and
+                          encouraging each other, and grows stronger through
+                          shared experiences and open communication. Ultimately,
+                          friendship is about being there for one another and
+                          valuing each other for who you truly are.
+                        improvement_text: null
+                      - slot: B
+                        response_text: >-
+                          Friendship is a special relationship between people
+                          based on mutual affection, trust, support, and
+                          understanding. It goes beyond simple acquaintanceship
+                          or casual interactions; true friends care about each
+                          other’s well-being and happiness.
+
+
+                          At its core, friendship means:
+
+
+                          - **Trust:** Friends can confide in each other and
+                          rely on one another without fear of judgment.
+
+                          - **Support:** Friends help each other through good
+                          times and bad, offering encouragement, comfort, and
+                          advice.
+
+                          - **Enjoyment:** Friendship brings joy—friends have
+                          fun together, share interests, laugh, and create
+                          memories.
+
+                          - **Understanding:** Friends accept each other's
+                          strengths and weaknesses. They forgive mistakes and
+                          understand feelings even when words aren’t spoken.
+
+                          - **Mutual respect:** Friendship is built on
+                          equality—each person values the other for who they
+                          are.
+
+
+                          Friendship enriches life by providing companionship,
+                          reducing loneliness, helping us grow as individuals,
+                          and making our experiences more meaningful.
+                        improvement_text: null
+                experiment:
+                  model_mode: same_model
+                  share_values_across_models: false
+                  parameters:
+                    temperature:
+                      enabled: true
+                      distribution: normal
+                      slot_a_value: 1.231
+                      slot_b_value: 0.8551
+                    top_p:
+                      enabled: true
+                      distribution: uniform
+                      slot_a_value: 0.9881
+                      slot_b_value: 0.9413
+                    top_k:
+                      enabled: false
+                      distribution: null
+                      slot_a_value: null
+                      slot_b_value: null
+                    frequency_penalty:
+                      enabled: true
+                      distribution: uniform
+                      slot_a_value: -0.4527
+                      slot_b_value: 0.5555
+                    presence_penalty:
+                      enabled: true
+                      distribution: uniform
+                      slot_a_value: -0.0744
+                      slot_b_value: 0.2874
           headers: {}
-      security: []
+      security:
+        - bearer: []
   /api/arena/leaderboard/:
     get:
       summary: leaderboard
@@ -557,82 +681,236 @@ paths:
                       type: string
                     provider_display_name:
                       type: string
-                    matches:
-                      type: integer
-                    wins:
-                      type: integer
-                    losses:
-                      type: integer
-                    ties:
-                      type: integer
-                    win_rate:
-                      type: number
-                    non_tie_win_rate:
-                      type: number
-                    elo_score:
-                      type: number
-                    avg_prompt_tokens:
-                      type: number
-                    avg_completion_tokens:
-                      type: number
-                    avg_total_tokens:
-                      type: number
-                    avg_latency_ms:
-                      type: number
-                      nullable: true
-                    avg_response_length_chars:
-                      type: number
+                    metrics:
+                      type: object
+                      properties:
+                        matches:
+                          type: integer
+                          nullable: true
+                        wins:
+                          type: integer
+                          nullable: true
+                        losses:
+                          type: integer
+                          nullable: true
+                        ties:
+                          type: integer
+                          nullable: true
+                        experimental_wins:
+                          type: integer
+                          nullable: true
+                        win_rate:
+                          type: number
+                          nullable: true
+                        non_tie_win_rate:
+                          type: number
+                          nullable: true
+                        elo_score:
+                          type: number
+                          nullable: true
+                      required:
+                        - matches
+                        - wins
+                        - losses
+                        - ties
+                        - experimental_wins
+                        - win_rate
+                        - non_tie_win_rate
+                        - elo_score
+                    averages:
+                      type: object
+                      properties:
+                        avg_prompt_tokens:
+                          type: number
+                          nullable: true
+                        avg_completion_tokens:
+                          type: number
+                          nullable: true
+                        avg_total_tokens:
+                          type: number
+                          nullable: true
+                        avg_latency_ms:
+                          type: number
+                          nullable: true
+                        avg_response_length_chars:
+                          type: number
+                          nullable: true
+                        avg_temperature:
+                          type: number
+                          nullable: true
+                        avg_top_p:
+                          type: number
+                          nullable: true
+                        avg_top_k:
+                          type: number
+                          nullable: true
+                        avg_frequency_penalty:
+                          type: number
+                          nullable: true
+                        avg_presence_penalty:
+                          type: number
+                          nullable: true
+                      required:
+                        - avg_prompt_tokens
+                        - avg_completion_tokens
+                        - avg_total_tokens
+                        - avg_latency_ms
+                        - avg_response_length_chars
+                        - avg_temperature
+                        - avg_top_p
+                        - avg_top_k
+                        - avg_frequency_penalty
+                        - avg_presence_penalty
                   required:
                     - model_name
                     - provider_name
                     - provider_display_name
-                    - matches
-                    - wins
-                    - losses
-                    - ties
-                    - win_rate
-                    - non_tie_win_rate
-                    - elo_score
-                    - avg_prompt_tokens
-                    - avg_completion_tokens
-                    - avg_total_tokens
-                    - avg_response_length_chars
+                    - metrics
+                    - averages
               example:
-                - model_name: gpt-4.1-nano
-                  provider_name: openai
-                  provider_display_name: OpenAI
-                  matches: 2
-                  wins: 1
-                  losses: 1
-                  ties: 0
-                  win_rate: 0.5
-                  non_tie_win_rate: 0.5
-                  elo_score: 1001.47
-                  avg_prompt_tokens: 15
-                  avg_completion_tokens: 152.5
-                  avg_total_tokens: 167.5
-                  avg_latency_ms: null
-                  avg_response_length_chars: 437.5
+                - model_name: vezilka-4b-it-q4-k-m
+                  provider_name: finki
+                  provider_display_name: FINKI
+                  metrics:
+                    matches: 2
+                    wins: 2
+                    losses: 0
+                    ties: 0
+                    experimental_wins: 0
+                    win_rate: 1
+                    non_tie_win_rate: 1
+                    elo_score: 1031.263693206478
+                  averages:
+                    avg_prompt_tokens: 82.5
+                    avg_completion_tokens: 100.25
+                    avg_total_tokens: 182.75
+                    avg_latency_ms: null
+                    avg_response_length_chars: 299.25
+                    avg_temperature: null
+                    avg_top_p: null
+                    avg_top_k: null
+                    avg_frequency_penalty: null
+                    avg_presence_penalty: null
+                - model_name: vezilka-4b-it-fp32
+                  provider_name: finki
+                  provider_display_name: FINKI
+                  metrics:
+                    matches: 2
+                    wins: 1
+                    losses: 1
+                    ties: 0
+                    experimental_wins: 0
+                    win_rate: 0.5
+                    non_tie_win_rate: 0.5
+                    elo_score: 1000.736306793522
+                  averages:
+                    avg_prompt_tokens: 95
+                    avg_completion_tokens: 110.25
+                    avg_total_tokens: 205.25
+                    avg_latency_ms: null
+                    avg_response_length_chars: 324.75
+                    avg_temperature: null
+                    avg_top_p: null
+                    avg_top_k: null
+                    avg_frequency_penalty: null
+                    avg_presence_penalty: null
                 - model_name: vezilka-4b-it-fp16
                   provider_name: finki
                   provider_display_name: FINKI
-                  matches: 2
-                  wins: 1
-                  losses: 1
-                  ties: 0
-                  win_rate: 0.5
-                  non_tie_win_rate: 0.5
-                  elo_score: 998.53
-                  avg_prompt_tokens: 17
-                  avg_completion_tokens: 161
-                  avg_total_tokens: 178
-                  avg_latency_ms: null
-                  avg_response_length_chars: 451.5
+                  metrics:
+                    matches: 0
+                    wins: 0
+                    losses: 0
+                    ties: 0
+                    experimental_wins: 0
+                    win_rate: 0
+                    non_tie_win_rate: null
+                    elo_score: 1000
+                  averages:
+                    avg_prompt_tokens: null
+                    avg_completion_tokens: null
+                    avg_total_tokens: null
+                    avg_latency_ms: null
+                    avg_response_length_chars: null
+                    avg_temperature: null
+                    avg_top_p: null
+                    avg_top_k: null
+                    avg_frequency_penalty: null
+                    avg_presence_penalty: null
+                - model_name: gpt-4.1
+                  provider_name: openai
+                  provider_display_name: OpenAI
+                  metrics:
+                    matches: 0
+                    wins: 0
+                    losses: 0
+                    ties: 0
+                    experimental_wins: 1
+                    win_rate: 0
+                    non_tie_win_rate: null
+                    elo_score: 1000
+                  averages:
+                    avg_prompt_tokens: null
+                    avg_completion_tokens: null
+                    avg_total_tokens: null
+                    avg_latency_ms: null
+                    avg_response_length_chars: null
+                    avg_temperature: 0.8673
+                    avg_top_p: 0.9324
+                    avg_top_k: null
+                    avg_frequency_penalty: 0.0174
+                    avg_presence_penalty: 0.1141
+                - model_name: gpt-5.4
+                  provider_name: openai
+                  provider_display_name: OpenAI
+                  metrics:
+                    matches: 1
+                    wins: 0
+                    losses: 1
+                    ties: 0
+                    experimental_wins: 0
+                    win_rate: 0
+                    non_tie_win_rate: 0
+                    elo_score: 984.736306793522
+                  averages:
+                    avg_prompt_tokens: 109.5
+                    avg_completion_tokens: 96.5
+                    avg_total_tokens: 206
+                    avg_latency_ms: null
+                    avg_response_length_chars: 264
+                    avg_temperature: null
+                    avg_top_p: null
+                    avg_top_k: null
+                    avg_frequency_penalty: null
+                    avg_presence_penalty: null
+                - model_name: vezilka-4b-it-q8-0
+                  provider_name: finki
+                  provider_display_name: FINKI
+                  metrics:
+                    matches: 1
+                    wins: 0
+                    losses: 1
+                    ties: 0
+                    experimental_wins: 0
+                    win_rate: 0
+                    non_tie_win_rate: 0
+                    elo_score: 983.263693206478
+                  averages:
+                    avg_prompt_tokens: 103.5
+                    avg_completion_tokens: 126.5
+                    avg_total_tokens: 230
+                    avg_latency_ms: null
+                    avg_response_length_chars: 362.5
+                    avg_temperature: null
+                    avg_top_p: null
+                    avg_top_k: null
+                    avg_frequency_penalty: null
+                    avg_presence_penalty: null
           headers: {}
       security: []
   /api/arena/models/vezilka-4b-it-fp16/:
     get:
-      summary: model_description
+      summary: model_details
       deprecated: false
       description: ''
       tags: []
@@ -661,31 +939,86 @@ paths:
                     type: boolean
                   is_macedonian_optimized:
                     type: boolean
-                  matches:
-                    type: integer
-                  wins:
-                    type: integer
-                  losses:
-                    type: integer
-                  ties:
-                    type: integer
-                  win_rate:
-                    type: number
-                  non_tie_win_rate:
-                    type: number
-                  elo_score:
-                    type: number
-                  avg_prompt_tokens:
-                    type: number
-                  avg_completion_tokens:
-                    type: number
-                  avg_total_tokens:
-                    type: number
-                  avg_latency_ms:
-                    type: number
-                    nullable: true
-                  avg_response_length_chars:
-                    type: number
+                  metrics:
+                    type: object
+                    properties:
+                      matches:
+                        type: integer
+                        nullable: true
+                      wins:
+                        type: integer
+                        nullable: true
+                      losses:
+                        type: integer
+                        nullable: true
+                      ties:
+                        type: integer
+                        nullable: true
+                      experimental_wins:
+                        type: integer
+                        nullable: true
+                      win_rate:
+                        type: number
+                        nullable: true
+                      non_tie_win_rate:
+                        type: number
+                        nullable: true
+                      elo_score:
+                        type: number
+                        nullable: true
+                    required:
+                      - matches
+                      - wins
+                      - losses
+                      - ties
+                      - experimental_wins
+                      - win_rate
+                      - non_tie_win_rate
+                      - elo_score
+                  averages:
+                    type: object
+                    properties:
+                      avg_prompt_tokens:
+                        type: number
+                        nullable: true
+                      avg_completion_tokens:
+                        type: number
+                        nullable: true
+                      avg_total_tokens:
+                        type: number
+                        nullable: true
+                      avg_latency_ms:
+                        type: number
+                        nullable: true
+                      avg_response_length_chars:
+                        type: number
+                        nullable: true
+                      avg_temperature:
+                        type: number
+                        nullable: true
+                      avg_top_p:
+                        type: number
+                        nullable: true
+                      avg_top_k:
+                        type: number
+                        nullable: true
+                      avg_frequency_penalty:
+                        type: number
+                        nullable: true
+                      avg_presence_penalty:
+                        type: number
+                        nullable: true
+                    required:
+                      - avg_prompt_tokens
+                      - avg_completion_tokens
+                      - avg_total_tokens
+                      - avg_latency_ms
+                      - avg_response_length_chars
+                      - avg_temperature
+                      - avg_top_p
+                      - avg_top_k
+                      - avg_frequency_penalty
+                      - avg_presence_penalty
                 required:
                   - name
                   - external_model_id
@@ -695,17 +1028,8 @@ paths:
                   - provider_description
                   - is_fine_tuned
                   - is_macedonian_optimized
-                  - matches
-                  - wins
-                  - losses
-                  - ties
-                  - win_rate
-                  - non_tie_win_rate
-                  - elo_score
-                  - avg_prompt_tokens
-                  - avg_completion_tokens
-                  - avg_total_tokens
-                  - avg_response_length_chars
+                  - metrics
+                  - averages
               example:
                 name: vezilka-4b-it-fp16
                 external_model_id: finki_ukim/vezilka:4b-it-fp16
@@ -719,23 +1043,34 @@ paths:
                   endpoint.
                 is_fine_tuned: true
                 is_macedonian_optimized: true
-                matches: 2
-                wins: 1
-                losses: 1
-                ties: 0
-                win_rate: 0.5
-                non_tie_win_rate: 0.5
-                elo_score: 998.53
-                avg_prompt_tokens: 17
-                avg_completion_tokens: 161
-                avg_total_tokens: 178
-                avg_latency_ms: null
-                avg_response_length_chars: 451.5
+                metrics:
+                  matches: 0
+                  wins: 0
+                  losses: 0
+                  ties: 0
+                  experimental_wins: 0
+                  win_rate: 0
+                  non_tie_win_rate: null
+                  elo_score: 1000
+                averages:
+                  avg_prompt_tokens: null
+                  avg_completion_tokens: null
+                  avg_total_tokens: null
+                  avg_latency_ms: null
+                  avg_response_length_chars: null
+                  avg_temperature: null
+                  avg_top_p: null
+                  avg_top_k: null
+                  avg_frequency_penalty: null
+                  avg_presence_penalty: null
           headers: {}
       security: []
 components:
   schemas: {}
   responses: {}
-  securitySchemes: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
 servers: []
 security: []

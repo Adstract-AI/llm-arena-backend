@@ -12,6 +12,12 @@ The main flow is:
 - the backend stores the battle, turns, responses, and vote for later analysis
 - the project also includes a direct chat flow where the user selects a Vezilka model and chats with it normally
 
+There are two arena modes:
+- standard arena battles
+- experimental arena battles
+
+Experimental arena battles are authenticated and user-owned. They let the system sample inference parameters such as temperature, top-p, top-k, frequency penalty, and presence penalty, persist those sampled values for the entire battle, and reveal them only after voting. Experimental battles also support user-authored response improvements for the latest turn without overwriting the original model output.
+
 The project is focused on evaluating Macedonian fine-tuned LLMs alongside global providers.
 
 ## Tech Stack
@@ -20,6 +26,9 @@ The project is focused on evaluating Macedonian fine-tuned LLMs alongside global
 - PostgreSQL
 - DRF Spectacular for API docs
 - LangChain integrations for model providers
+- JWT authentication with `djangorestframework-simplejwt`
+- Google OAuth
+- GitHub OAuth
 
 ## Quick Start
 ### Run with Docker
@@ -41,6 +50,40 @@ That startup flow also:
 
 After the first cold start, you can disable this automatic setup behavior by setting `AUTO_START_SETUP=false`.
 
+### Setup Commands
+The project includes two useful management commands for local setup and reset flows.
+
+`setup_project`
+- prepares the project for normal use
+- runs the setup sequence that seeds the required base data
+- creates the default admin user when needed
+
+Example:
+
+```bash
+conda run -n adstract-backend python manage.py setup_project --full-auto
+```
+
+`hardreset`
+- drops and recreates the working database state for a fresh start
+- is useful during heavy schema changes or when you want a clean seeded environment again
+- runs the project setup flow again after resetting
+
+Example:
+
+```bash
+conda run -n adstract-backend python manage.py hardreset
+```
+
+`AUTO_START_SETUP`
+- this env flag controls whether the backend container automatically runs the setup flow on startup
+- when `AUTO_START_SETUP=true`, container startup will run the setup logic automatically
+- when `AUTO_START_SETUP=false`, the backend starts without auto-running setup, and you can run `setup_project` or `hardreset` manually
+
+Typical usage:
+- first local Docker boot: leave `AUTO_START_SETUP=true`
+- later boots on an already prepared environment: set `AUTO_START_SETUP=false`
+
 ### Environment
 Use `.env.example` as the template and create a local `.env` file.
 
@@ -56,12 +99,49 @@ Important variables:
 - `ANTHROPIC_API_KEY`
 - `GOOGLE_API_KEY`
 - `FINKI_BASE_URL`
+- `JWT_ACCESS_TOKEN_LIFETIME_MINUTES`
+- `JWT_REFRESH_TOKEN_LIFETIME_DAYS`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `GITHUB_OAUTH_CLIENT_ID`
+- `GITHUB_OAUTH_CLIENT_SECRET`
+- `GITHUB_OAUTH_REDIRECT_URI`
 
 ## API Endpoints
 
-For detailed endpoint specifications and descriptions, see the files in [api_docs](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs):
-- [llm-arena.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/llm-arena.openapi.yaml) for the arena endpoints
-- [chat.openapi.yaml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/api_docs/chat.openapi.yaml) for the chat endpoints
+For detailed endpoint specifications and descriptions, see the files in [api_docs](api_docs):
+- [auth.openapi.yaml](api_docs/auth.openapi.yaml) for authentication endpoints
+- [llm-arena.openapi.yaml](api_docs/llm-arena.openapi.yaml) for standard arena endpoints
+- [experimental-llm-arena.openapi.yaml](api_docs/experimental-llm-arena.openapi.yaml) for experimental arena endpoints
+- [chat.openapi.yaml](api_docs/chat.openapi.yaml) for chat endpoints
+
+## Authentication
+
+The backend uses first-party JWT authentication.
+
+- Google and GitHub OAuth are used for login
+- the backend exchanges provider auth codes for user identity
+
+Ownership rules:
+- chat sessions always require authentication and belong to one user
+- experimental arena battles require authentication and belong to one user
+- standard arena battles can be anonymous
+- if a logged-in user creates a standard arena battle, that battle becomes user-owned
+
+## Admin Features
+
+The Django admin includes:
+- model/provider management and activation controls
+- experimental sampling spec management
+- agent prompt management
+- battle inspection with:
+  - turns and per-side responses
+  - response diagnostics such as tokens, latency, finish reason, and raw metadata
+  - response improvements for experimental battles
+- human votes and LLM judge votes
+- an admin action that lets staff judge selected battles with an active model acting as an LLM judge
+
 
 ## Project Purpose
 This service is responsible for:
@@ -69,21 +149,23 @@ This service is responsible for:
 - sending every turn prompt to both models
 - anonymizing and returning the full transcript snapshot
 - storing turns, responses, metadata, and final conversation votes
+- storing optional experimental configurations and response improvements
 - exposing direct chat endpoints for chosen Vezilka models
 - storing chat sessions and chat messages
+- handling OAuth login and JWT issuance
 - exposing leaderboard and model-related API endpoints
 
-The backend is designed around blind comparison, randomized response ordering, multi-turn battle conversations, direct Vezilka chat, and persistent storage of evaluation results.
+The backend is designed around blind comparison, multi-turn battle conversations, experimental parameterized evaluation, direct Vezilka chat and persistent storage of evaluation results.
 
 ## Local Compose Services
-The local [docker-compose.yml](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/docker-compose.yml) in this folder starts only:
+The local [docker-compose.yml](docker-compose.yml) in this folder starts only:
 - `backend`
 - `db`
 
 This is useful when you want to run the frontend separately or connect an already running frontend to the backend API.
 
 ## Production Docker
-For a deployment-style backend image, use [Dockerfile.deployment](/Users/itonkdong/Work/Fax/INSOK/llm-arena/llm-arena-backend/Dockerfile.deployment#L1).
+For a deployment-style backend image, use [Dockerfile.deployment](Dockerfile.deployment).
 
 It:
 - installs the backend dependencies

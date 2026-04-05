@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>Confirm judging battles without a human vote</h1>
+    <p>
+      You selected {{ queryset|length }} battle(s) to judge with
+      <strong>{{ judge_model.name }}</strong>.
+    </p>
+    <p>
+      {{ unvoted_battles|length }} selected battle(s) do not have a human vote yet.
+      If you continue, an LLM judge vote will still be created for them.
+    </p>
+
+    <ul>
+      {% for battle in unvoted_battles %}
+        <li>{{ battle.id }}</li>
+      {% endfor %}
+    </ul>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="{{ action_name }}">
+      <input type="hidden" name="confirm_unvoted_judging" value="yes">
+      <input type="hidden" name="judge_model" value="{{ judge_model.id }}">
+      {% for battle in queryset %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ battle.pk }}">
+      {% endfor %}
+      <input type="hidden" name="select_across" value="0">
+      <input type="submit" value="Confirm" class="default">
+      <a href="" class="button cancel-link">Cancel</a>
+    </form>
+  </div>
+{% endblock %}

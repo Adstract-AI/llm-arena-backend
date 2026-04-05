@@ -57,7 +57,7 @@ paths:
       security: []
   /api/chat/messages/:
     post:
-      summary: send_message
+      summary: send_follow_up_message
       deprecated: false
       description: ''
       tags: []
@@ -81,14 +81,18 @@ paths:
                   type: string
                 message:
                   type: string
+                session_id:
+                  type: string
               required:
                 - provider_name
                 - model_name
                 - message
+                - session_id
             example:
               provider_name: finki
               model_name: vezilka-4b-it-fp16
-              message: Здраво, како си?
+              message: Дали мислиш дека Македонија е убаво место?
+              session_id: '{{SESSION_ID}}'
         required: true
       responses:
         '201':
@@ -97,39 +101,26 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  session_id:
-                    type: string
-                  response_text:
-                    type: string
-                  model_name:
-                    type: string
-                  provider_name:
-                    type: string
-                required:
-                  - session_id
-                  - response_text
-                  - model_name
-                  - provider_name
+                properties: {}
               example:
-                session_id: 35e81c46-16c5-40a8-83fb-53357a5ae2d2
+                session_id: 0f8f5519-3e67-4cd5-8ae5-82cbd68ffaba
                 response_text: >-
-                  Здраво! Јас сум прилично добро, ти благодарам што праша. Како
-                  виртуелен асистент, постојано помагам и работам, па можам да
-                  имам многу обврски. Но, кога имам слободен момент, уживам во
-                  читање, пишување и поминување време со моите програмери и
-                  други интелигентни луѓе.
-
-
-                  Задоволство ми е што можам да ти помогнам со било кој проблем.
-                  Среќен ден! 😊
+                  Македонија е позната по својата природна убавина, културно
+                  наследство и традиции. Има многу интересни локации и заштитени
+                  подрачја кои вреди да се посетат. Сепак, тоа е прашање на
+                  личен вкус. Некои луѓе можат да ја најдат убава и вредна за
+                  посета, додека други можат да имаат различни мислења.
                 model_name: vezilka-4b-it-fp16
                 provider_name: finki
           headers: {}
-      security: []
+      security:
+        - bearer: []
 components:
   schemas: {}
   responses: {}
-  securitySchemes: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
 servers: []
 security: []

@@ -5,6 +5,7 @@ from typing import Any
 from django.db.models import Prefetch
 
 from common.abstract import AbstractService
+from experimental_llm_arena.models import EXPERIMENT_PARAMETER_CONFIG_MAP
 from llm_arena.models import ArenaTurn, BattleResponse, BattleVote, LLMModel
 from llm_arena.services.llm_model_service import LLMModelService
 
@@ -14,18 +15,8 @@ class LeaderboardEntry:
     model_name: str
     provider_name: str
     provider_display_name: str
-    matches: int
-    wins: int
-    losses: int
-    ties: int
-    win_rate: float
-    non_tie_win_rate: float | None
-    elo_score: float
-    avg_prompt_tokens: float | None
-    avg_completion_tokens: float | None
-    avg_total_tokens: float | None
-    avg_latency_ms: float | None
-    avg_response_length_chars: float | None
+    metrics: dict[str, Any]
+    averages: dict[str, Any]
 
 
 class LeaderboardService(AbstractService):
@@ -44,13 +35,18 @@ class LeaderboardService(AbstractService):
             list[dict[str, Any]]: Sorted leaderboard entries with derived model statistics.
         """
         active_models = list(self.llm_model_service.get_active_models())
-        stats_by_model_id = {
+        standard_stats_by_model_id = {
             model.id: self._initialize_model_stats(model)
             for model in active_models
         }
+        experimental_stats_by_model_id = {
+            model.id: self._initialize_experimental_win_stats(model)
+            for model in active_models
+        }
 
-        votes = (
+        standard_votes = (
             BattleVote.objects
+            .filter(battle__experiment_config__isnull=True)
             .select_related("battle__model_a__provider", "battle__model_b__provider")
             .prefetch_related(
                 Prefetch(
@@ -69,16 +65,16 @@ class LeaderboardService(AbstractService):
             .order_by("created_at")
         )
 
-        for vote in votes:
+        for vote in standard_votes:
             battle = vote.battle
             if (
-                battle.model_a_id not in stats_by_model_id
-                or battle.model_b_id not in stats_by_model_id
+                battle.model_a_id not in standard_stats_by_model_id
+                or battle.model_b_id not in standard_stats_by_model_id
             ):
                 continue
 
-            left_stats = stats_by_model_id[battle.model_a_id]
-            right_stats = stats_by_model_id[battle.model_b_id]
+            left_stats = standard_stats_by_model_id[battle.model_a_id]
+            right_stats = standard_stats_by_model_id[battle.model_b_id]
 
             self._update_match_counts(left_stats)
             self._update_match_counts(right_stats)
@@ -99,15 +95,52 @@ class LeaderboardService(AbstractService):
                 right_stats=right_stats,
             )
 
+        experimental_votes = (
+            BattleVote.objects
+            .filter(battle__experiment_config__isnull=False)
+            .exclude(choice=BattleVote.VoteChoice.TIE)
+            .select_related(
+                "battle__model_a__provider",
+                "battle__model_b__provider",
+                "battle__experiment_config",
+                "battle__experiment_config__temperature_config",
+                "battle__experiment_config__top_p_config",
+                "battle__experiment_config__top_k_config",
+                "battle__experiment_config__frequency_penalty_config",
+                "battle__experiment_config__presence_penalty_config",
+            )
+            .order_by("created_at")
+        )
+
+        for vote in experimental_votes:
+            winning_model = vote.battle.get_model_for_slot(vote.choice)
+            stats = experimental_stats_by_model_id.get(winning_model.id)
+            if stats is None:
+                continue
+
+            stats["experimental_wins"] += 1
+            slot_suffix = "a" if vote.choice == BattleResponse.ResponseSlot.A else "b"
+
+            for parameter_name in EXPERIMENT_PARAMETER_CONFIG_MAP:
+                parameter_config = vote.battle.experiment_config.get_parameter_config(parameter_name)
+                if parameter_config is None:
+                    continue
+
+                stats[f"{parameter_name}_sum"] += float(getattr(parameter_config, f"value_{slot_suffix}"))
+                stats[f"{parameter_name}_count"] += 1
+
         leaderboard_entries = [
-            self._build_entry(stats)
-            for stats in stats_by_model_id.values()
+            self._build_entry(
+                standard_stats=standard_stats_by_model_id[model.id],
+                experimental_stats=experimental_stats_by_model_id[model.id],
+            )
+            for model in active_models
         ]
         leaderboard_entries.sort(
             key=lambda entry: (
-                entry.elo_score,
-                entry.wins,
-                entry.matches,
+                entry.metrics["elo_score"],
+                entry.metrics["wins"],
+                entry.metrics["matches"],
                 entry.model_name,
             ),
             reverse=True,
@@ -137,18 +170,28 @@ class LeaderboardService(AbstractService):
                 model_name=model.name,
                 provider_name=model.provider.name,
                 provider_display_name=model.provider.display_name,
-                matches=0,
-                wins=0,
-                losses=0,
-                ties=0,
-                win_rate=0.0,
-                non_tie_win_rate=None,
-                elo_score=self.DEFAULT_ELO_SCORE,
-                avg_prompt_tokens=None,
-                avg_completion_tokens=None,
-                avg_total_tokens=None,
-                avg_latency_ms=None,
-                avg_response_length_chars=None,
+                metrics={
+                    "matches": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "ties": 0,
+                    "experimental_wins": 0,
+                    "win_rate": 0.0,
+                    "non_tie_win_rate": None,
+                    "elo_score": self.DEFAULT_ELO_SCORE,
+                },
+                averages={
+                    "avg_prompt_tokens": None,
+                    "avg_completion_tokens": None,
+                    "avg_total_tokens": None,
+                    "avg_latency_ms": None,
+                    "avg_response_length_chars": None,
+                    "avg_temperature": None,
+                    "avg_top_p": None,
+                    "avg_top_k": None,
+                    "avg_frequency_penalty": None,
+                    "avg_presence_penalty": None,
+                },
             )
         )
 
@@ -179,6 +222,32 @@ class LeaderboardService(AbstractService):
             "latency_ms_count": 0,
             "response_length_sum": 0,
             "response_length_count": 0,
+        }
+
+    @staticmethod
+    def _initialize_experimental_win_stats(model: LLMModel) -> dict[str, Any]:
+        """
+        Create the mutable accumulator for experimental win parameter averages.
+
+        Args:
+            model: Active model to initialize.
+
+        Returns:
+            dict[str, Any]: Mutable experimental win accumulator.
+        """
+        return {
+            "model": model,
+            "experimental_wins": 0,
+            "temperature_sum": 0.0,
+            "temperature_count": 0,
+            "top_p_sum": 0.0,
+            "top_p_count": 0,
+            "top_k_sum": 0.0,
+            "top_k_count": 0,
+            "frequency_penalty_sum": 0.0,
+            "frequency_penalty_count": 0,
+            "presence_penalty_sum": 0.0,
+            "presence_penalty_count": 0,
         }
 
     @staticmethod
@@ -268,42 +337,69 @@ class LeaderboardService(AbstractService):
         """
         return 1.0 / (1.0 + pow(10.0, (opponent_rating - player_rating) / 400.0))
 
-    def _build_entry(self, stats: dict[str, Any]) -> LeaderboardEntry:
+    def _build_entry(
+        self,
+        standard_stats: dict[str, Any],
+        experimental_stats: dict[str, Any],
+    ) -> LeaderboardEntry:
         """
         Convert a mutable stats accumulator into the serialized leaderboard shape.
 
         Args:
-            stats: Mutable model statistics accumulator.
+            standard_stats: Mutable standard leaderboard statistics accumulator.
+            experimental_stats: Mutable experimental win averages accumulator.
 
         Returns:
             LeaderboardEntry: Final leaderboard entry.
         """
-        matches = stats["matches"]
-        wins = stats["wins"]
-        losses = stats["losses"]
-        ties = stats["ties"]
+        matches = standard_stats["matches"]
+        wins = standard_stats["wins"]
+        losses = standard_stats["losses"]
+        ties = standard_stats["ties"]
         decisive_matches = wins + losses
 
         def average(sum_key: str, count_key: str) -> float | None:
-            count = stats[count_key]
+            count = standard_stats[count_key]
             if count == 0:
                 return None
-            return stats[sum_key] / count
+            return standard_stats[sum_key] / count
+
+        def experimental_average(sum_key: str, count_key: str) -> float | None:
+            count = experimental_stats[count_key]
+            if count == 0:
+                return None
+            return experimental_stats[sum_key] / count
 
         return LeaderboardEntry(
-            model_name=stats["model"].name,
-            provider_name=stats["model"].provider.name,
-            provider_display_name=stats["model"].provider.display_name,
-            matches=matches,
-            wins=wins,
-            losses=losses,
-            ties=ties,
-            win_rate=(wins / matches) if matches else 0.0,
-            non_tie_win_rate=(wins / decisive_matches) if decisive_matches else None,
-            elo_score=stats["elo_score"],
-            avg_prompt_tokens=average("prompt_tokens_sum", "prompt_tokens_count"),
-            avg_completion_tokens=average("completion_tokens_sum", "completion_tokens_count"),
-            avg_total_tokens=average("total_tokens_sum", "total_tokens_count"),
-            avg_latency_ms=average("latency_ms_sum", "latency_ms_count"),
-            avg_response_length_chars=average("response_length_sum", "response_length_count"),
+            model_name=standard_stats["model"].name,
+            provider_name=standard_stats["model"].provider.name,
+            provider_display_name=standard_stats["model"].provider.display_name,
+            metrics={
+                "matches": matches,
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
+                "experimental_wins": experimental_stats["experimental_wins"],
+                "win_rate": (wins / matches) if matches else 0.0,
+                "non_tie_win_rate": (wins / decisive_matches) if decisive_matches else None,
+                "elo_score": standard_stats["elo_score"],
+            },
+            averages={
+                "avg_prompt_tokens": average("prompt_tokens_sum", "prompt_tokens_count"),
+                "avg_completion_tokens": average("completion_tokens_sum", "completion_tokens_count"),
+                "avg_total_tokens": average("total_tokens_sum", "total_tokens_count"),
+                "avg_latency_ms": average("latency_ms_sum", "latency_ms_count"),
+                "avg_response_length_chars": average("response_length_sum", "response_length_count"),
+                "avg_temperature": experimental_average("temperature_sum", "temperature_count"),
+                "avg_top_p": experimental_average("top_p_sum", "top_p_count"),
+                "avg_top_k": experimental_average("top_k_sum", "top_k_count"),
+                "avg_frequency_penalty": experimental_average(
+                    "frequency_penalty_sum",
+                    "frequency_penalty_count",
+                ),
+                "avg_presence_penalty": experimental_average(
+                    "presence_penalty_sum",
+                    "presence_penalty_count",
+                ),
+            },
         )

@@ -40,6 +40,11 @@ class Command(BaseCommand):
                     "is_active": model_seed.is_active,
                     "is_fine_tuned": model_seed.is_fine_tuned,
                     "is_macedonian_optimized": model_seed.is_macedonian_optimized,
+                    "supports_temperature": model_seed.supports_temperature,
+                    "supports_top_p": model_seed.supports_top_p,
+                    "supports_top_k": model_seed.supports_top_k,
+                    "supports_frequency_penalty": model_seed.supports_frequency_penalty,
+                    "supports_presence_penalty": model_seed.supports_presence_penalty,
                     "configuration": model_seed.configuration,
                 },
             )

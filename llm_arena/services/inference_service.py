@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -22,6 +23,7 @@ class ArenaInferenceService(AbstractService):
             model: LLMModel,
             prompt: str,
             system_prompt: str | None = None,
+            generation_config: dict[str, int | float] | None = None,
     ) -> dict[str, Any]:
         """
         Generate a response and normalized metadata for a catalog model.
@@ -30,6 +32,7 @@ class ArenaInferenceService(AbstractService):
             model: Catalog model instance to invoke.
             prompt: The user prompt to send to the model.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -44,6 +47,7 @@ class ArenaInferenceService(AbstractService):
             prompt=prompt,
             history_messages=None,
             system_prompt=system_prompt,
+            generation_config=generation_config,
         )
 
     def generate_response_details_with_history(
@@ -52,6 +56,7 @@ class ArenaInferenceService(AbstractService):
             history_messages: Sequence[Any],
             prompt: str,
             system_prompt: str | None = None,
+            generation_config: dict[str, int | float] | None = None,
     ) -> dict[str, Any]:
         """
         Generate a response using persisted conversation history plus the current prompt.
@@ -61,6 +66,7 @@ class ArenaInferenceService(AbstractService):
             history_messages: Persisted prior messages used as chat memory.
             prompt: The user prompt to send to the model.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -73,6 +79,7 @@ class ArenaInferenceService(AbstractService):
             prompt=prompt,
             history_messages=history_messages,
             system_prompt=system_prompt,
+            generation_config=generation_config,
         )
 
     def _generate_response_details(
@@ -81,6 +88,7 @@ class ArenaInferenceService(AbstractService):
             prompt: str,
             history_messages: Sequence[Any] | None,
             system_prompt: str | None,
+            generation_config: dict[str, int | float] | None,
     ) -> dict[str, Any]:
         """
         Shared inference implementation for arena and chat flows.
@@ -90,6 +98,7 @@ class ArenaInferenceService(AbstractService):
             prompt: The user prompt to send to the model.
             history_messages: Optional persisted prior messages used as chat memory.
             system_prompt: Optional system instruction prepended to the message list.
+            generation_config: Optional runtime generation config for this request.
 
         Returns:
             dict[str, Any]: Response text and normalized provider metadata for persistence.
@@ -104,15 +113,17 @@ class ArenaInferenceService(AbstractService):
         runtime_model_name = model.external_model_id
         try:
             chat_model = self.llm_chat_factory_service.build_chat_model(
-                provider_name=model.provider_name,
-                model_name=runtime_model_name,
+                model=model,
+                generation_config=generation_config,
             )
             messages = self._build_messages(
                 history_messages=history_messages,
                 prompt=normalized_prompt,
                 system_prompt=system_prompt,
             )
+            started_at = perf_counter()
             response = chat_model.invoke(messages)
+            latency_ms = round((perf_counter() - started_at) * 1000)
         except Exception as exc:
             raise LLMInferenceException(
                 detail=f"Inference failed for model '{runtime_model_name}'."
@@ -134,6 +145,7 @@ class ArenaInferenceService(AbstractService):
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),
             "total_tokens": usage.get("total_tokens"),
+            "latency_ms": latency_ms,
             "raw_metadata": {
                 "additional_kwargs": additional_kwargs,
                 "response_metadata": response_metadata,

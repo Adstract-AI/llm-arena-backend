@@ -1,7 +1,10 @@
 import uuid
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 from common.models import TimestampedModel
 
 
@@ -34,6 +37,11 @@ class LLMModel(TimestampedModel):
     is_active = models.BooleanField(default=True)
     is_fine_tuned = models.BooleanField(default=False)
     is_macedonian_optimized = models.BooleanField(default=False)
+    supports_temperature = models.BooleanField(default=False)
+    supports_top_p = models.BooleanField(default=False)
+    supports_top_k = models.BooleanField(default=False)
+    supports_frequency_penalty = models.BooleanField(default=False)
+    supports_presence_penalty = models.BooleanField(default=False)
     configuration = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -48,6 +56,11 @@ class LLMModel(TimestampedModel):
             models.Index(fields=["is_active"]),
             models.Index(fields=["is_fine_tuned"]),
             models.Index(fields=["is_macedonian_optimized"]),
+            models.Index(fields=["supports_temperature"]),
+            models.Index(fields=["supports_top_p"]),
+            models.Index(fields=["supports_top_k"]),
+            models.Index(fields=["supports_frequency_penalty"]),
+            models.Index(fields=["supports_presence_penalty"]),
         ]
 
     def __str__(self) -> str:
@@ -69,6 +82,13 @@ class ArenaBattle(TimestampedModel):
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="arena_battles",
+        null=True,
+        blank=True,
+    )
     model_a = models.ForeignKey(
         LLMModel,
         on_delete=models.PROTECT,
@@ -90,6 +110,7 @@ class ArenaBattle(TimestampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
+            models.Index(fields=["user", "created_at"]),
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
         ]
@@ -224,6 +245,36 @@ class BattleResponse(TimestampedModel):
         """Return the fixed model assigned to this response slot."""
         return self.turn.battle.get_model_for_slot(self.slot)
 
+    @property
+    def improvement_text(self) -> str | None:
+        """
+        Return the saved user improvement text when one exists for this response.
+
+        Returns:
+            str | None: Saved improvement text or None.
+        """
+        try:
+            return self.improvement.improved_response_text
+        except BattleResponseImprovement.DoesNotExist:
+            return None
+
+
+class BattleResponseImprovement(TimestampedModel):
+    """Store one user-authored improvement for a generated battle response."""
+
+    response = models.OneToOneField(
+        BattleResponse,
+        on_delete=models.CASCADE,
+        related_name="improvement",
+    )
+    improved_response_text = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Improvement for {self.response}"
+
 
 class BattleVote(TimestampedModel):
     """Capture the user preference submitted for a completed battle."""
@@ -249,3 +300,84 @@ class BattleVote(TimestampedModel):
 
     def __str__(self) -> str:
         return f"Vote for {self.battle}"
+
+
+class LLMJudgeVote(TimestampedModel):
+    """Capture one LLM-derived judgment for a completed battle."""
+
+    battle = models.OneToOneField(
+        ArenaBattle,
+        on_delete=models.CASCADE,
+        related_name="llm_judge_vote",
+    )
+    judge_model = models.ForeignKey(
+        LLMModel,
+        on_delete=models.PROTECT,
+        related_name="llm_judge_votes",
+    )
+    choice = models.CharField(max_length=4, choices=BattleVote.VoteChoice.choices)
+    reasoning = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["choice"]),
+            models.Index(fields=["judge_model"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"LLM judge vote for {self.battle}"
+
+
+class AgentPrompt(TimestampedModel):
+    """Store configurable system prompts for internal agent workflows."""
+
+    class AgentType(models.TextChoices):
+        JUDGE = "judge", "Judge"
+
+    agent_type = models.CharField(max_length=32, choices=AgentType.choices)
+    name = models.CharField(max_length=150)
+    system_prompt = models.TextField()
+    is_active = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["agent_type", "name", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agent_type"],
+                condition=Q(is_active=True),
+                name="unique_active_agent_prompt_per_type",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["agent_type", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_agent_type_display()} - {self.name}"
+
+    def clean(self) -> None:
+        """
+        Validate that only one active prompt exists for each agent type.
+
+        Raises:
+            ValidationError: If another active prompt already exists for this agent type.
+        """
+        super().clean()
+        if not self.is_active:
+            return
+
+        existing_active_prompt = (
+            AgentPrompt.objects
+            .filter(agent_type=self.agent_type, is_active=True)
+            .exclude(pk=self.pk)
+            .exists()
+        )
+        if existing_active_prompt:
+            raise ValidationError(
+                {
+                    "is_active": (
+                        f"Only one active prompt is allowed for agent type '{self.agent_type}'."
+                    )
+                }
+            )

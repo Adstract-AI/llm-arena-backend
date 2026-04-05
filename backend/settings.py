@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 from helpers.constants import DEFAULT_TIME_ZONE
@@ -19,6 +20,8 @@ from helpers.env_variables import (
     DJANGO_ALLOWED_HOSTS,
     DJANGO_DEBUG,
     DJANGO_SECRET_KEY,
+    JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
+    JWT_REFRESH_TOKEN_LIFETIME_DAYS,
     POSTGRES_DB,
     POSTGRES_HOST,
     POSTGRES_PASSWORD,
@@ -47,6 +50,7 @@ CSRF_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS
 # Application definition
 
 INSTALLED_APPS = [
+    'accounts',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -56,9 +60,11 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_spectacular',
     'rest_framework',
+    'rest_framework_simplejwt',
     'common',
     'chat',
     'llm_arena',
+    'experimental_llm_arena',
 ]
 
 MIDDLEWARE = [
@@ -158,9 +164,19 @@ STORAGES = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'accounts.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+        'accounts.authentication.ActiveUserJWTAuthentication',
+    ),
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_ACCESS_TOKEN_LIFETIME_MINUTES),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TOKEN_LIFETIME_DAYS),
 }
 
 SPECTACULAR_SETTINGS = {

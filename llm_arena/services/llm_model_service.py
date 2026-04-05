@@ -98,6 +98,8 @@ class LLMModelService(AbstractModelService[LLMModel]):
         service = LeaderboardService()
         model = self.get_model_by_name(model_name, require_active=False)
         leaderboard_entry = service.get_model_leaderboard_entry(model)
+        metrics = leaderboard_entry["metrics"]
+        averages = leaderboard_entry["averages"]
 
         return {
             "name": model.name,
@@ -108,18 +110,8 @@ class LLMModelService(AbstractModelService[LLMModel]):
             "provider_description": model.provider.description,
             "is_fine_tuned": model.is_fine_tuned,
             "is_macedonian_optimized": model.is_macedonian_optimized,
-            "matches": leaderboard_entry["matches"],
-            "wins": leaderboard_entry["wins"],
-            "losses": leaderboard_entry["losses"],
-            "ties": leaderboard_entry["ties"],
-            "win_rate": leaderboard_entry["win_rate"],
-            "non_tie_win_rate": leaderboard_entry["non_tie_win_rate"],
-            "elo_score": leaderboard_entry["elo_score"],
-            "avg_prompt_tokens": leaderboard_entry["avg_prompt_tokens"],
-            "avg_completion_tokens": leaderboard_entry["avg_completion_tokens"],
-            "avg_total_tokens": leaderboard_entry["avg_total_tokens"],
-            "avg_latency_ms": leaderboard_entry["avg_latency_ms"],
-            "avg_response_length_chars": leaderboard_entry["avg_response_length_chars"],
+            "metrics": metrics,
+            "averages": averages,
         }
 
     def get_model_by_name_for_provider(
