@@ -15,7 +15,7 @@ class ExperimentalArenaIncompatibleModelsException(ExperimentalArenaException):
     """Raised when the active model pool cannot satisfy an experiment request."""
 
     status_code = status.HTTP_409_CONFLICT
-    default_detail = "No compatible active models are available for this experiment."
+    default_detail = "No compatible active models are available for this configuration."
     default_code = "experimental_arena_incompatible_models"
 
 
