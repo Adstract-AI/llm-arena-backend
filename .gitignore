@@ -11,9 +11,7 @@ seeder/
 short_documentations/
 #deprecated/
 # Django Migrations
-*/migrations/*.py
 */migrations/__pycache__/
-!*/migrations/__init__.py
 
 # Environments
 .venv/
