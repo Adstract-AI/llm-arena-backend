@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from time import perf_counter
 from typing import Any, Sequence
 
@@ -81,6 +82,87 @@ class ArenaInferenceService(AbstractService):
             system_prompt=system_prompt,
             generation_config=generation_config,
         )
+
+    def stream_response_details_with_history(
+            self,
+            model: LLMModel,
+            history_messages: Sequence[Any],
+            prompt: str,
+            system_prompt: str | None = None,
+            generation_config: dict[str, int | float] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """
+        Stream response chunks using persisted conversation history plus the current prompt.
+
+        Yields:
+            dict[str, Any]: Delta events followed by one completed event with normalized metadata.
+        """
+        normalized_prompt = prompt.strip()
+        if not normalized_prompt:
+            raise LLMInferenceException(detail="A prompt is required for inference.")
+
+        runtime_model_name = model.external_model_id
+        try:
+            chat_model = self.llm_chat_factory_service.build_chat_model(
+                model=model,
+                generation_config=generation_config,
+            )
+            messages = self._build_messages(
+                history_messages=history_messages,
+                prompt=normalized_prompt,
+                system_prompt=system_prompt,
+            )
+            started_at = perf_counter()
+            collected_content: list[str] = []
+            additional_kwargs: dict[str, Any] = {}
+            response_metadata: dict[str, Any] = {}
+
+            for chunk in chat_model.stream(messages):
+                chunk_additional_kwargs = getattr(chunk, "additional_kwargs", {}) or {}
+                chunk_response_metadata = getattr(chunk, "response_metadata", {}) or {}
+                additional_kwargs.update(
+                    {key: value for key, value in chunk_additional_kwargs.items() if value not in (None, {})}
+                )
+                response_metadata.update(
+                    {key: value for key, value in chunk_response_metadata.items() if value not in (None, {})}
+                )
+
+                delta_text = self.content_service.extract_response_content(chunk.content)
+                if not delta_text:
+                    continue
+
+                collected_content.append(delta_text)
+                yield {
+                    "type": "delta",
+                    "text": delta_text,
+                }
+
+            latency_ms = round((perf_counter() - started_at) * 1000)
+        except Exception as exc:
+            raise LLMInferenceException(
+                detail=f"Inference failed for model '{runtime_model_name}'."
+            ) from exc
+
+        usage = (
+                additional_kwargs.get("usage")
+                or response_metadata.get("token_usage")
+                or response_metadata.get("usage")
+                or {}
+        )
+        yield {
+            "type": "completed",
+            "response_text": "".join(collected_content),
+            "finish_reason": additional_kwargs.get("finish_reason")
+                             or response_metadata.get("finish_reason", ""),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "latency_ms": latency_ms,
+            "raw_metadata": {
+                "additional_kwargs": additional_kwargs,
+                "response_metadata": response_metadata,
+            },
+        }
 
     def _generate_response_details(
             self,

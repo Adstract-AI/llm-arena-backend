@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib import admin
@@ -30,6 +31,7 @@ from llm_arena.models import (
 )
 from llm_arena.services.agent_service import AgentService, JudgeDecision
 from llm_arena.services.arena_service import ArenaService
+from llm_arena.services.arena_streaming_service import ArenaStreamingService
 from llm_arena.services.leaderboard_service import LeaderboardService
 
 User = get_user_model()
@@ -72,6 +74,7 @@ class ArenaApiTests(APITestCase):
         )
 
         self.create_url = reverse("arena-battle-create")
+        self.stream_create_url = reverse("arena-battle-stream-create")
         self.leaderboard_url = reverse("arena-leaderboard-list")
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
@@ -102,6 +105,57 @@ class ArenaApiTests(APITestCase):
                 {"slot": "B", "response_text": "B1"},
             ],
         )
+
+    @patch.object(ArenaStreamingService.inference_service, "stream_response_details_with_history")
+    @patch.object(ArenaService, "_select_random_models")
+    def test_stream_create_battle_emits_deltas_and_persists_responses(
+        self,
+        mock_select_random_models,
+        mock_stream,
+    ):
+        mock_select_random_models.return_value = (self.model_a, self.model_b)
+
+        def stream_response(model, **kwargs):
+            response_text = "A1" if model == self.model_a else "B1"
+            yield {"type": "delta", "text": response_text[0]}
+            yield {"type": "delta", "text": response_text[1]}
+            yield self._stream_completed_details(response_text)
+
+        mock_stream.side_effect = stream_response
+
+        response = self.client.post(
+            self.stream_create_url,
+            {"prompt": "Explain friendship."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/event-stream")
+
+        stream_text = self._consume_streaming_response(response)
+        events = self._parse_sse_events(stream_text)
+        event_names = [event["event"] for event in events]
+
+        self.assertIn("battle_created", event_names)
+        self.assertIn("turn_created", event_names)
+        self.assertEqual(event_names.count("response_started"), 2)
+        self.assertEqual(event_names.count("response_delta"), 4)
+        self.assertEqual(event_names.count("response_completed"), 2)
+        self.assertIn("turn_completed", event_names)
+        self.assertEqual(event_names[-1], "done")
+
+        battle = ArenaBattle.objects.get()
+        self.assertEqual(battle.status, ArenaBattle.BattleStatus.AWAITING_VOTE)
+        responses = {
+            battle_response.slot: battle_response
+            for battle_response in BattleResponse.objects.filter(turn__battle=battle)
+        }
+        self.assertEqual(responses[BattleResponse.ResponseSlot.A].response_text, "A1")
+        self.assertEqual(responses[BattleResponse.ResponseSlot.B].response_text, "B1")
+        self.assertEqual(responses[BattleResponse.ResponseSlot.A].latency_ms, 25)
+        done_payload = events[-1]["data"]
+        self.assertEqual(done_payload["id"], str(battle.id))
+        self.assertEqual(done_payload["status"], ArenaBattle.BattleStatus.AWAITING_VOTE)
 
     @patch.object(ArenaService.inference_service, "generate_response_details_with_history")
     @patch.object(ArenaService, "_select_random_models")
@@ -1002,6 +1056,41 @@ class ArenaApiTests(APITestCase):
             "total_tokens": 12,
             "raw_metadata": {"source": "test"},
         }
+
+    @staticmethod
+    def _stream_completed_details(response_text: str) -> dict:
+        return {
+            "type": "completed",
+            "response_text": response_text,
+            "finish_reason": "stop",
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12,
+            "latency_ms": 25,
+            "raw_metadata": {"source": "stream-test"},
+        }
+
+    @staticmethod
+    def _consume_streaming_response(response) -> str:
+        return "".join(
+            chunk.decode() if isinstance(chunk, bytes) else chunk
+            for chunk in response.streaming_content
+        )
+
+    @staticmethod
+    def _parse_sse_events(stream_text: str) -> list[dict]:
+        parsed_events = []
+        for raw_event in stream_text.strip().split("\n\n"):
+            event_name = None
+            event_data = None
+            for line in raw_event.splitlines():
+                if line.startswith("event: "):
+                    event_name = line.removeprefix("event: ")
+                if line.startswith("data: "):
+                    event_data = json.loads(line.removeprefix("data: "))
+            if event_name:
+                parsed_events.append({"event": event_name, "data": event_data})
+        return parsed_events
 
 
 class AgentServiceTests(APITestCase):

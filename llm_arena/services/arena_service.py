@@ -102,6 +102,29 @@ class ArenaService(AbstractService):
             ArenaBattle: Persisted battle with its first completed turn.
         """
         normalized_prompt = self._normalize_prompt(prompt)
+        battle, turn = self.prepare_battle_with_models(
+            prompt=normalized_prompt,
+            model_a=model_a,
+            model_b=model_b,
+            experiment_setup_callback=experiment_setup_callback,
+        )
+        self._generate_turn(battle=battle, turn=turn)
+        return self.get_battle(battle.id)
+
+    def prepare_battle_with_models(
+        self,
+        prompt: str,
+        model_a: LLMModel,
+        model_b: LLMModel,
+        experiment_setup_callback: Callable[[ArenaBattle], None] | None = None,
+    ) -> tuple[ArenaBattle, ArenaTurn]:
+        """
+        Create a battle and first pending turn without generating model responses.
+
+        This is used by both the synchronous and streaming arena flows so row
+        creation, ownership, and experimental setup stay consistent.
+        """
+        normalized_prompt = self._normalize_prompt(prompt)
         battle = ArenaBattle.objects.create(
             user=self.auth_service.get_optional_authenticated_user(),
             model_a=model_a,
@@ -114,8 +137,25 @@ class ArenaService(AbstractService):
             experiment_setup_callback(battle)
 
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
-        self._generate_turn(battle=battle, turn=turn)
-        return self.get_battle(battle.id)
+        return battle, turn
+
+    def prepare_battle(self, prompt: str) -> tuple[ArenaBattle, ArenaTurn]:
+        """
+        Create a standard battle and first pending turn without generating responses.
+
+        Args:
+            prompt: Initial prompt for the battle.
+
+        Returns:
+            tuple[ArenaBattle, ArenaTurn]: Persisted battle and pending first turn.
+        """
+        normalized_prompt = self._normalize_prompt(prompt)
+        model_a, model_b = self._select_random_models()
+        return self.prepare_battle_with_models(
+            prompt=normalized_prompt,
+            model_a=model_a,
+            model_b=model_b,
+        )
 
     def continue_battle(self, battle_id: UUID, prompt: str) -> ArenaBattle:
         """
@@ -144,6 +184,28 @@ class ArenaService(AbstractService):
         turn = self._create_turn(battle=battle, prompt=normalized_prompt)
         self._generate_turn(battle=battle, turn=turn)
         return self.get_battle(battle.id)
+
+    def prepare_continue_battle(self, battle_id: UUID, prompt: str) -> tuple[ArenaBattle, ArenaTurn]:
+        """
+        Create the next pending turn for a battle without generating responses.
+
+        Args:
+            battle_id: UUID primary key for the battle.
+            prompt: Follow-up prompt for the battle.
+
+        Returns:
+            tuple[ArenaBattle, ArenaTurn]: Persisted battle and pending turn.
+        """
+        normalized_prompt = self._normalize_prompt(prompt)
+        battle = self.get_battle(battle_id)
+        self._validate_battle_can_continue(battle)
+
+        battle.status = ArenaBattle.BattleStatus.IN_PROGRESS
+        battle.error_message = None
+        battle.save(update_fields=["status", "error_message", "updated_at"])
+
+        turn = self._create_turn(battle=battle, prompt=normalized_prompt)
+        return battle, turn
 
     @transaction.atomic
     def update_experimental_response(
