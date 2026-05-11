@@ -46,6 +46,7 @@ The backend container waits for Postgres and runs setup automatically on startup
 
 That startup flow also:
 - seeds the database with the required initial data
+- seeds the active platform settings and default rate limits
 - creates a default superuser with username `admin` and password `admin`
 
 After the first cold start, you can disable this automatic setup behavior by setting `AUTO_START_SETUP=false`.
@@ -116,6 +117,16 @@ For detailed endpoint specifications and descriptions, see the files in [api_doc
 - [experimental-llm-arena.openapi.yaml](api_docs/experimental-llm-arena.openapi.yaml) for experimental arena endpoints
 - [chat.openapi.yaml](api_docs/chat.openapi.yaml) for chat endpoints
 
+Arena battle generation also supports server-sent event streaming:
+- `POST /api/arena/battles/stream/`
+- `POST /api/arena/battles/<battle-id>/turns/stream/`
+- `POST /api/experimental-arena/battles/stream/`
+- `POST /api/chat/messages/stream/`
+
+Streaming responses use `text/event-stream`. Arena streams emit per-slot events such as `response_delta`, `response_completed`, `response_failed`, `turn_completed`, and `done`. Chat streams emit the same response events without slots because only one model is responding. Frontends should use `fetch` streaming so request bodies and JWT authorization headers can be sent normally.
+
+For production deployments, make sure any proxy in front of Django does not buffer these SSE responses. The backend sets `Cache-Control: no-cache` and `X-Accel-Buffering: no`, but proxy/server configuration still needs to respect streaming.
+
 ## Authentication
 
 The backend uses first-party JWT authentication.
@@ -134,6 +145,7 @@ Ownership rules:
 The Django admin includes:
 - model/provider management and activation controls
 - experimental sampling spec management
+- platform settings and rate limit management
 - agent prompt management
 - battle inspection with:
   - turns and per-side responses
@@ -141,6 +153,18 @@ The Django admin includes:
   - response improvements for experimental battles
 - human votes and LLM judge votes
 - an admin action that lets staff judge selected battles with an active model acting as an LLM judge
+
+## Rate Limiting
+
+Generation endpoints are protected by database-backed fixed-window rate limits. The active `PlatformSettings` profile links to one `RateLimits` profile, so administrators can prepare profiles like general or high-demand and switch the active one from Django admin.
+
+The seeded default limits are `5/minute`, `50/hour`, and `200/day` for each bucket:
+- anonymous standard arena requests are limited by IP address
+- logged-in standard arena requests are limited by user
+- experimental arena requests are limited by user
+- chat requests are limited by user
+
+Read-only endpoints, votes, and response-improvement endpoints are not rate-limited.
 
 
 ## Project Purpose
@@ -153,6 +177,7 @@ This service is responsible for:
 - exposing direct chat endpoints for chosen Vezilka models
 - storing chat sessions and chat messages
 - handling OAuth login and JWT issuance
+- enforcing admin-configured rate limits for generation endpoints
 - exposing leaderboard and model-related API endpoints
 
 The backend is designed around blind comparison, multi-turn battle conversations, experimental parameterized evaluation, direct Vezilka chat and persistent storage of evaluation results.

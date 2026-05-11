@@ -9,7 +9,10 @@ from chat.serializers import (
     FinkiModelSerializer,
 )
 from chat.services.chat_service import ChatService
+from chat.services.chat_streaming_service import ChatStreamingService
 from common.abstract import ServiceView
+from llm_arena.views import build_sse_response
+from platform_settings.services import RateLimitService
 
 
 class FinkiModelListView(ServiceView[ChatService], ListAPIView):
@@ -35,6 +38,7 @@ class ChatMessageCreateView(ServiceView[ChatService], CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_chat_limit()
 
         response_payload = self.service.send_message(
             provider_name=serializer.validated_data["provider_name"],
@@ -45,3 +49,24 @@ class ChatMessageCreateView(ServiceView[ChatService], CreateAPIView):
 
         response_serializer = ChatMessageResponseSerializer(response_payload)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ChatMessageStreamCreateView(ServiceView[ChatStreamingService], CreateAPIView):
+    """Create one chat turn and stream the selected FINKI model response."""
+
+    permission_classes = [IsAuthenticated]
+    service_class = ChatStreamingService
+    serializer_class = ChatMessageRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_chat_limit()
+
+        events = self.service.stream_message(
+            provider_name=serializer.validated_data["provider_name"],
+            model_name=serializer.validated_data["model_name"],
+            message=serializer.validated_data["message"],
+            session_id=serializer.validated_data.get("session_id"),
+        )
+        return build_sse_response(events)

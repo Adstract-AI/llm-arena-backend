@@ -92,6 +92,7 @@ def build_initial_setup_steps() -> list[Step]:
             "Seeding experimental parameter sampling specs",
             lambda: run_command(python_command() + ["seed_experiment_sampling_specs"]),
         ),
+        ("Seeding platform settings", lambda: run_command(python_command() + ["seed_platform_settings"])),
         ("Creating default admin user", create_default_superuser),
     ]
 
