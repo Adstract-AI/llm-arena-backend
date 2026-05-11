@@ -120,8 +120,9 @@ Arena battle generation also supports server-sent event streaming:
 - `POST /api/arena/battles/stream/`
 - `POST /api/arena/battles/<battle-id>/turns/stream/`
 - `POST /api/experimental-arena/battles/stream/`
+- `POST /api/chat/messages/stream/`
 
-Streaming responses use `text/event-stream` and emit per-slot events such as `response_delta`, `response_completed`, `response_failed`, `turn_completed`, and `done`. Frontends should use `fetch` streaming so request bodies and JWT authorization headers can be sent normally.
+Streaming responses use `text/event-stream`. Arena streams emit per-slot events such as `response_delta`, `response_completed`, `response_failed`, `turn_completed`, and `done`. Chat streams emit the same response events without slots because only one model is responding. Frontends should use `fetch` streaming so request bodies and JWT authorization headers can be sent normally.
 
 For production deployments, make sure any proxy in front of Django does not buffer these SSE responses. The backend sets `Cache-Control: no-cache` and `X-Accel-Buffering: no`, but proxy/server configuration still needs to respect streaming.
 

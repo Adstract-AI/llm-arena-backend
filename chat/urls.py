@@ -1,6 +1,6 @@
 from django.urls import path
 
-from chat.views import ChatMessageCreateView, FinkiModelListView
+from chat.views import ChatMessageCreateView, ChatMessageStreamCreateView, FinkiModelListView
 
 urlpatterns = [
     # FINKI chat models
@@ -8,4 +8,5 @@ urlpatterns = [
 
     # Session-backed chat messages
     path("messages/", ChatMessageCreateView.as_view(), name="chat-message-create"),
+    path("messages/stream/", ChatMessageStreamCreateView.as_view(), name="chat-message-stream-create"),
 ]
