@@ -16,10 +16,12 @@ from llm_arena.serializers import (
     LeaderboardModelEntrySerializer,
     LLMModelDetailSerializer,
 )
+from llm_arena.models import ArenaBattle
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.arena_streaming_service import ArenaStreamingService
 from llm_arena.services.leaderboard_service import LeaderboardService
 from llm_arena.services.llm_model_service import LLMModelService
+from platform_settings.services import RateLimitService
 
 
 def build_sse_response(events) -> StreamingHttpResponse:
@@ -27,6 +29,18 @@ def build_sse_response(events) -> StreamingHttpResponse:
     response["Cache-Control"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
     return response
+
+
+def enforce_arena_turn_rate_limit(request, battle_id) -> None:
+    rate_limit_service = RateLimitService(user=request.user)
+    is_experimental_battle = ArenaBattle.objects.filter(
+        id=battle_id,
+        experiment_config__isnull=False,
+    ).exists()
+    if is_experimental_battle:
+        rate_limit_service.enforce_experimental_arena_limit()
+        return
+    rate_limit_service.enforce_normal_arena_limit(request)
 
 
 class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
@@ -46,6 +60,7 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_normal_arena_limit(request)
 
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
@@ -65,6 +80,7 @@ class ArenaBattleStreamCreateView(ServiceView[ArenaStreamingService], CreateAPIV
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_normal_arena_limit(request)
 
         streaming_session = self.service.prepare_create_battle_stream(
             prompt=serializer.validated_data["prompt"],
@@ -81,6 +97,7 @@ class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        enforce_arena_turn_rate_limit(request, kwargs["id"])
 
         battle = self.service.continue_battle(
             battle_id=kwargs["id"],
@@ -104,6 +121,7 @@ class ArenaBattleTurnStreamCreateView(ServiceView[ArenaStreamingService], Create
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        enforce_arena_turn_rate_limit(request, kwargs["id"])
 
         streaming_session = self.service.prepare_continue_battle_stream(
             battle_id=kwargs["id"],

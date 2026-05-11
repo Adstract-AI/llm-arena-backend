@@ -14,12 +14,16 @@ from experimental_llm_arena.models import (
 from experimental_llm_arena.services.experimental_arena_service import ExperimentalArenaService
 from llm_arena.models import ArenaBattle, LLMModel, LLMProvider
 from llm_arena.services.arena_service import ArenaService
+from platform_settings.management.commands.seed_platform_settings import DEFAULT_RATE_LIMITS
+from platform_settings.models import PlatformSettings, RateLimits
 
 User = get_user_model()
 
 
 class ExperimentalArenaApiTests(APITestCase):
     def setUp(self) -> None:
+        rate_limits = RateLimits.objects.create(name="Test Rate Limits", **DEFAULT_RATE_LIMITS)
+        PlatformSettings.objects.create(name="Test Settings", is_active=True, rate_limits=rate_limits)
         self.user = User.objects.create_user(
             username="experimental-user",
             email="experimental@example.com",

@@ -9,12 +9,16 @@ from rest_framework.test import APITestCase
 from chat.models import ChatMessage, ChatSession
 from chat.services.chat_service import ChatService
 from llm_arena.models import LLMModel, LLMProvider
+from platform_settings.management.commands.seed_platform_settings import DEFAULT_RATE_LIMITS
+from platform_settings.models import PlatformSettings, RateLimits
 
 User = get_user_model()
 
 
 class ChatApiTests(APITestCase):
     def setUp(self) -> None:
+        rate_limits = RateLimits.objects.create(name="Test Rate Limits", **DEFAULT_RATE_LIMITS)
+        PlatformSettings.objects.create(name="Test Settings", is_active=True, rate_limits=rate_limits)
         self.user = User.objects.create_user(
             username="chat-user",
             email="chat@example.com",

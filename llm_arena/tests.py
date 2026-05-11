@@ -33,12 +33,16 @@ from llm_arena.services.agent_service import AgentService, JudgeDecision
 from llm_arena.services.arena_service import ArenaService
 from llm_arena.services.arena_streaming_service import ArenaStreamingService
 from llm_arena.services.leaderboard_service import LeaderboardService
+from platform_settings.management.commands.seed_platform_settings import DEFAULT_RATE_LIMITS
+from platform_settings.models import PlatformSettings, RateLimits
 
 User = get_user_model()
 
 
 class ArenaApiTests(APITestCase):
     def setUp(self) -> None:
+        rate_limits = RateLimits.objects.create(name="Test Rate Limits", **DEFAULT_RATE_LIMITS)
+        PlatformSettings.objects.create(name="Test Settings", is_active=True, rate_limits=rate_limits)
         self.user = User.objects.create_user(
             username="arena-user",
             email="arena@example.com",

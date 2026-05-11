@@ -8,6 +8,7 @@ from experimental_llm_arena.serializers import ExperimentalBattleCreateRequestSe
 from experimental_llm_arena.services.experimental_arena_service import ExperimentalArenaService
 from llm_arena.serializers import ExperimentalArenaBattleSnapshotSerializer
 from llm_arena.views import build_sse_response
+from platform_settings.services import RateLimitService
 
 
 class ExperimentalArenaBattleCreateView(ServiceView[ExperimentalArenaService], CreateAPIView):
@@ -20,6 +21,7 @@ class ExperimentalArenaBattleCreateView(ServiceView[ExperimentalArenaService], C
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_experimental_arena_limit()
 
         battle = self.service.create_battle(
             prompt=serializer.validated_data["prompt"],
@@ -43,6 +45,7 @@ class ExperimentalArenaBattleStreamCreateView(ServiceView[ExperimentalArenaServi
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        RateLimitService(user=request.user).enforce_experimental_arena_limit()
 
         streaming_session = self.service.create_battle_stream(
             prompt=serializer.validated_data["prompt"],

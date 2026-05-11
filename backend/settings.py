@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'chat',
     'llm_arena',
     'experimental_llm_arena',
+    'platform_settings',
 ]
 
 MIDDLEWARE = [
