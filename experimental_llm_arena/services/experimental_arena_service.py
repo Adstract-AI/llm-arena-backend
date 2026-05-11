@@ -19,6 +19,7 @@ from experimental_llm_arena.models import (
 )
 from llm_arena.models import ArenaBattle, LLMModel
 from llm_arena.services.arena_service import ArenaService
+from llm_arena.services.arena_streaming_service import ArenaStreamingService, StreamingSession
 from llm_arena.services.llm_model_service import LLMModelService
 
 
@@ -27,6 +28,7 @@ class ExperimentalArenaService(AbstractService):
 
     llm_model_service = LLMModelService()
     arena_service = ArenaService()
+    arena_streaming_service = ArenaStreamingService()
     auth_service = AuthService()
 
     SAME_MODEL_MAX_RESAMPLES = 25
@@ -81,6 +83,52 @@ class ExperimentalArenaService(AbstractService):
         )
 
         return self.arena_service.create_battle_with_models(
+            prompt=prompt,
+            model_a=model_a,
+            model_b=model_b,
+            experiment_setup_callback=self._build_experiment_setup_callback(
+                experiment_config_fields=experiment_config_fields,
+                parameter_config_payloads=parameter_config_payloads,
+            ),
+        )
+
+    def create_battle_stream(
+        self,
+        prompt: str,
+        model_mode: str,
+        share_values_across_models: bool | None,
+        parameters: dict[str, dict[str, Any]],
+    ) -> StreamingSession:
+        """
+        Start a new experimental battle and stream the first turn responses.
+
+        Args:
+            prompt: Initial user prompt for the battle.
+            model_mode: Same-model or different-model experiment mode.
+            share_values_across_models: Whether different-model experiments reuse sampled values.
+            parameters: Enabled parameter flags and chosen distributions.
+
+        Returns:
+            StreamingSession: Prepared battle, turn, and SSE event iterator.
+        """
+        self.auth_service.require_authenticated_user(
+            detail="Authentication is required to create experimental battles."
+        )
+        enabled_parameter_names = self._get_enabled_parameter_names(parameters)
+        sampling_specs = self._get_sampling_specs(enabled_parameter_names)
+        compatible_models = self._get_compatible_models(enabled_parameter_names)
+        model_a, model_b = self._select_models(
+            compatible_models=compatible_models,
+            model_mode=model_mode,
+        )
+        experiment_config_fields, parameter_config_payloads = self._build_experiment_config_payloads(
+            model_mode=model_mode,
+            share_values_across_models=share_values_across_models,
+            parameters=parameters,
+            sampling_specs=sampling_specs,
+        )
+
+        return self.arena_streaming_service.prepare_battle_with_models_stream(
             prompt=prompt,
             model_a=model_a,
             model_b=model_b,

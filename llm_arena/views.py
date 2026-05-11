@@ -1,3 +1,4 @@
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
@@ -16,8 +17,16 @@ from llm_arena.serializers import (
     LLMModelDetailSerializer,
 )
 from llm_arena.services.arena_service import ArenaService
+from llm_arena.services.arena_streaming_service import ArenaStreamingService
 from llm_arena.services.leaderboard_service import LeaderboardService
 from llm_arena.services.llm_model_service import LLMModelService
+
+
+def build_sse_response(events) -> StreamingHttpResponse:
+    response = StreamingHttpResponse(events, content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
 
 
 class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
@@ -47,6 +56,22 @@ class ArenaBattleCreateView(ServiceView[ArenaService], CreateAPIView):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
+class ArenaBattleStreamCreateView(ServiceView[ArenaStreamingService], CreateAPIView):
+    """Create a new blind arena battle and stream both first-turn responses."""
+
+    service_class = ArenaStreamingService
+    serializer_class = BattleCreateRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        streaming_session = self.service.prepare_create_battle_stream(
+            prompt=serializer.validated_data["prompt"],
+        )
+        return build_sse_response(streaming_session.events)
+
+
 class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
     """Append a new prompt turn to an existing arena battle and return the full transcript."""
 
@@ -68,6 +93,23 @@ class ArenaBattleTurnCreateView(ServiceView[ArenaService], CreateAPIView):
             self.service.build_battle_snapshot(battle)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ArenaBattleTurnStreamCreateView(ServiceView[ArenaStreamingService], CreateAPIView):
+    """Append a prompt turn to an arena battle and stream both slot responses."""
+
+    service_class = ArenaStreamingService
+    serializer_class = BattleTurnCreateRequestSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        streaming_session = self.service.prepare_continue_battle_stream(
+            battle_id=kwargs["id"],
+            prompt=serializer.validated_data["prompt"],
+        )
+        return build_sse_response(streaming_session.events)
 
 
 class ArenaBattleResponseUpdateView(ServiceView[ArenaService]):
