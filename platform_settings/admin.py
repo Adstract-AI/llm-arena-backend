@@ -1,5 +1,9 @@
 from django import forms
 from django.contrib import admin, messages
+from django.db import transaction
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from django.utils.http import unquote
 
 from platform_settings.models import PlatformSettings, RateLimitUsage, RateLimits
 
@@ -40,18 +44,34 @@ class PlatformSettingsAdmin(admin.ModelAdmin):
             },
         ),
     )
+    actions = ("delete_selected_platform_settings",)
 
     def save_model(self, request, obj, form, change):
-        if obj.is_active:
-            PlatformSettings.objects.exclude(pk=obj.pk).update(is_active=False)
-        super().save_model(request, obj, form, change)
+        with transaction.atomic():
+            if obj.is_active:
+                PlatformSettings.objects.exclude(pk=obj.pk).update(is_active=False)
+            super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request, obj=None) -> bool:
-        if obj is None:
-            return True
-        if obj.is_active:
-            return False
-        return PlatformSettings.objects.count() > 1
+        return super().has_delete_permission(request, obj=obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, unquote(object_id))
+        if obj is not None and self._is_delete_blocked(obj):
+            self.message_user(request, self._get_delete_block_message(obj), messages.ERROR)
+            return HttpResponseRedirect(self._get_change_url(obj))
+        return super().delete_view(request, object_id, extra_context=extra_context)
+
+    def delete_model(self, request, obj):
+        if self._is_delete_blocked(obj):
+            self.message_user(request, self._get_delete_block_message(obj), messages.ERROR)
+            return
+        super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
         blocked_count = queryset.filter(is_active=True).count()
@@ -62,7 +82,7 @@ class PlatformSettingsAdmin(admin.ModelAdmin):
 
         deleted_count = deletable_queryset.count()
         if deleted_count:
-            super().delete_queryset(request, deletable_queryset)
+            deletable_queryset.delete()
             self.message_user(request, f"Deleted {deleted_count} inactive settings profile(s).", messages.SUCCESS)
         if blocked_count:
             self.message_user(
@@ -70,6 +90,27 @@ class PlatformSettingsAdmin(admin.ModelAdmin):
                 "Skipped settings profile deletion because one active profile must remain.",
                 messages.ERROR,
             )
+
+    @admin.action(description="Delete selected platform settings")
+    def delete_selected_platform_settings(self, request, queryset):
+        self.delete_queryset(request, queryset)
+
+    @staticmethod
+    def _is_delete_blocked(obj: PlatformSettings) -> bool:
+        return obj.is_active or PlatformSettings.objects.count() <= 1
+
+    @staticmethod
+    def _get_delete_block_message(obj: PlatformSettings) -> str:
+        if obj.is_active:
+            return "Active platform settings cannot be deleted. Make another settings profile active first."
+        return "The last platform settings profile cannot be deleted."
+
+    def _get_change_url(self, obj: PlatformSettings) -> str:
+        return reverse(
+            f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_change",
+            args=(obj.pk,),
+            current_app=self.admin_site.name,
+        )
 
 
 @admin.register(RateLimits)
@@ -124,18 +165,43 @@ class RateLimitsAdmin(admin.ModelAdmin):
             },
         ),
     )
+    actions = ("delete_selected_rate_limits",)
 
     def has_delete_permission(self, request, obj=None) -> bool:
-        if obj is None:
-            return True
-        return not hasattr(obj, "platform_settings")
+        return super().has_delete_permission(request, obj=obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, unquote(object_id))
+        if obj is not None and self._is_delete_blocked(obj):
+            self.message_user(
+                request,
+                "This rate limit profile cannot be deleted because a platform settings profile uses it.",
+                messages.ERROR,
+            )
+            return HttpResponseRedirect(self._get_change_url(obj))
+        return super().delete_view(request, object_id, extra_context=extra_context)
+
+    def delete_model(self, request, obj):
+        if self._is_delete_blocked(obj):
+            self.message_user(
+                request,
+                "This rate limit profile cannot be deleted because a platform settings profile uses it.",
+                messages.ERROR,
+            )
+            return
+        super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
         linked_queryset = queryset.filter(platform_settings__isnull=False)
         deletable_queryset = queryset.filter(platform_settings__isnull=True)
         deleted_count = deletable_queryset.count()
         if deleted_count:
-            super().delete_queryset(request, deletable_queryset)
+            deletable_queryset.delete()
             self.message_user(request, f"Deleted {deleted_count} rate limit profile(s).", messages.SUCCESS)
         if linked_queryset.exists():
             self.message_user(
@@ -143,6 +209,21 @@ class RateLimitsAdmin(admin.ModelAdmin):
                 "Skipped rate limit profile deletion because linked settings profiles still use them.",
                 messages.ERROR,
             )
+
+    @admin.action(description="Delete selected rate limit profiles")
+    def delete_selected_rate_limits(self, request, queryset):
+        self.delete_queryset(request, queryset)
+
+    @staticmethod
+    def _is_delete_blocked(obj: RateLimits) -> bool:
+        return hasattr(obj, "platform_settings")
+
+    def _get_change_url(self, obj: RateLimits) -> str:
+        return reverse(
+            f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_change",
+            args=(obj.pk,),
+            current_app=self.admin_site.name,
+        )
 
 
 @admin.register(RateLimitUsage)

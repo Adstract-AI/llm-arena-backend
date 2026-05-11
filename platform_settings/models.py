@@ -1,5 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db import router
 from django.db.models import Q
 
 from common.models import TimestampedModel
@@ -55,6 +57,32 @@ class PlatformSettings(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def validate_constraints(self, exclude=None):
+        """
+        Let admin switch the active profile in one save.
+
+        The database constraint still enforces one active profile, but model-form
+        validation must not block the admin before save_model() can deactivate the
+        previously active profile inside the same transaction.
+        """
+        constraints = self.get_constraints()
+        using = router.db_for_write(self.__class__, instance=self)
+
+        errors = {}
+        for model_class, model_constraints in constraints:
+            for constraint in model_constraints:
+                if self.is_active and constraint.name == "unique_active_platform_settings":
+                    continue
+                try:
+                    constraint.validate(model_class, self, exclude=exclude, using=using)
+                except ValidationError as exc:
+                    if getattr(exc, "code", None) == "unique" and len(constraint.fields) == 1:
+                        errors.setdefault(constraint.fields[0], []).append(exc)
+                    else:
+                        errors = exc.update_error_dict(errors)
+        if errors:
+            raise ValidationError(errors)
 
 
 class RateLimitUsage(TimestampedModel):
