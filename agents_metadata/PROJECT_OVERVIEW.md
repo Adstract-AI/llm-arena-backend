@@ -10,6 +10,8 @@ The platform also includes an experimental arena mode. Experimental battles use 
 
 The project also includes a direct chat mode where users can choose a specific Vezilka model and chat with it normally. This gives users more control when they want to explore a single model's behavior outside the blind arena flow.
 
+Generation endpoints are protected by admin-configured database rate limits. Standard anonymous arena usage is limited by IP, while logged-in standard arena, experimental arena, and chat usage are limited by user.
+
 The main goal of this project is to evaluate **Macedonian fine-tuned LLMs**.
 
 ---
@@ -69,6 +71,7 @@ This setup ensures **blind evaluation** and reduces bias.
 - Supports response improvements in experimental battles
 - Exposes a direct chat API for selected Vezilka models and stores chat sessions and messages
 - Handles OAuth login and JWT issuance
+- Enforces active platform rate-limit settings for generation endpoints
 - Exposes leaderboard and model detail analytics
 - Supports an admin-only LLM judge workflow for completed battles
 
@@ -83,6 +86,7 @@ This setup ensures **blind evaluation** and reduces bias.
 - **Persistent storage**: All turns, responses, and votes must be saved
 - **Experimental isolation**: Experimental arena battles must persist their own generation parameter configuration
 - **Authenticated ownership**: Chat sessions and experimental battles must belong to a specific user
+- **Admin-controlled rate limits**: Generation endpoints must respect active platform settings and configured minute, hour, and day limits
 - **Separate direct chat mode**: Users should also be able to interact with a chosen Vezilka model outside the arena flow
 
 ---
