@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -18,7 +17,7 @@ from platform_settings.services.settings_service import SettingsService
 class RateWindowConfig:
     window: str
     limit: int
-    window_start: Any
+    duration: timedelta
 
 
 class RateLimitService(AbstractService):
@@ -96,33 +95,48 @@ class RateLimitService(AbstractService):
         identity: str,
         window_config: RateWindowConfig,
     ) -> RateLimitUsage:
-        usage, _ = RateLimitUsage.objects.select_for_update().get_or_create(
+        now = timezone.now()
+        active_window_start_cutoff = now - window_config.duration
+        usage = (
+            RateLimitUsage.objects.select_for_update()
+            .filter(
+                bucket=bucket,
+                identity_type=identity_type,
+                identity=identity,
+                window=window_config.window,
+                window_start__gt=active_window_start_cutoff,
+            )
+            .order_by("-window_start")
+            .first()
+        )
+        if usage is not None:
+            return usage
+
+        return RateLimitUsage.objects.create(
             bucket=bucket,
             identity_type=identity_type,
             identity=identity,
             window=window_config.window,
-            window_start=window_config.window_start,
-            defaults={"count": 0},
+            window_start=now,
+            count=0,
         )
-        return usage
 
     def _get_window_configs(self, bucket: str, rate_limits) -> list[RateWindowConfig]:
-        now = timezone.now()
         return [
             RateWindowConfig(
                 window=RateLimitUsage.Window.MINUTE,
                 limit=getattr(rate_limits, f"{bucket}_per_minute"),
-                window_start=now.replace(second=0, microsecond=0),
+                duration=timedelta(minutes=1),
             ),
             RateWindowConfig(
                 window=RateLimitUsage.Window.HOUR,
                 limit=getattr(rate_limits, f"{bucket}_per_hour"),
-                window_start=now.replace(minute=0, second=0, microsecond=0),
+                duration=timedelta(hours=1),
             ),
             RateWindowConfig(
                 window=RateLimitUsage.Window.DAY,
                 limit=getattr(rate_limits, f"{bucket}_per_day"),
-                window_start=now.replace(hour=0, minute=0, second=0, microsecond=0),
+                duration=timedelta(days=1),
             ),
         ]
 

@@ -1,7 +1,11 @@
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from platform_settings.exceptions import RateLimitExceededException
 from platform_settings.management.commands.seed_platform_settings import DEFAULT_RATE_LIMITS
@@ -71,6 +75,49 @@ class PlatformSettingsServiceTests(TestCase):
             window=RateLimitUsage.Window.MINUTE,
         )
         self.assertEqual(usage.count, 1)
+
+    def test_rate_limit_window_resets_from_first_request_timestamp(self):
+        self._create_active_settings(
+            normal_arena_anonymous_per_minute=1,
+            normal_arena_anonymous_per_hour=10,
+            normal_arena_anonymous_per_day=10,
+        )
+        request = self.factory.post(
+            "/api/arena/battles/",
+            REMOTE_ADDR="10.0.0.5",
+        )
+        request.user = AnonymousUser()
+        service = RateLimitService(user=request.user)
+        first_request_at = timezone.make_aware(datetime(2026, 5, 11, 12, 38, 50))
+        next_calendar_minute_at = timezone.make_aware(datetime(2026, 5, 11, 12, 39, 0))
+        after_exact_window_at = first_request_at + timedelta(seconds=61)
+
+        with patch(
+            "platform_settings.services.rate_limit_service.timezone.now",
+            side_effect=[
+                first_request_at,
+                first_request_at,
+                first_request_at,
+                next_calendar_minute_at,
+                next_calendar_minute_at,
+                next_calendar_minute_at,
+                after_exact_window_at,
+                after_exact_window_at,
+                after_exact_window_at,
+            ],
+        ):
+            service.enforce_normal_arena_limit(request)
+            with self.assertRaises(RateLimitExceededException):
+                service.enforce_normal_arena_limit(request)
+            service.enforce_normal_arena_limit(request)
+
+        minute_windows = RateLimitUsage.objects.filter(
+            bucket=RateLimitUsage.Bucket.NORMAL_ARENA_ANONYMOUS,
+            identity_type=RateLimitUsage.IdentityType.IP,
+            identity="10.0.0.5",
+            window=RateLimitUsage.Window.MINUTE,
+        )
+        self.assertEqual(minute_windows.count(), 2)
 
     def test_authenticated_normal_arena_limit_uses_user_bucket(self):
         self._create_active_settings(
