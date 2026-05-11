@@ -105,8 +105,8 @@ class ChatService(AbstractService):
                 prompt=normalized_message,
             )
         except LLMInferenceException as exc:
-            logger.exception(
-                f"Chat inference failed for session {session.id} and model {llm_model.name}"
+            logger.error(
+                f"Chat inference failed for session {session.id} and model {llm_model.name}. Error: {str(exc.detail)}"
             )
             raise ChatInferenceFailedException(detail=str(exc.detail)) from exc
 

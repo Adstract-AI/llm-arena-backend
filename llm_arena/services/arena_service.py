@@ -507,9 +507,9 @@ class ArenaService(AbstractService):
                 persisted_response.raw_metadata = response_details["raw_metadata"]
                 persisted_response.save()
             except LLMInferenceException as exc:
-                logger.exception(
+                logger.error(
                     f"Battle turn generation failed for battle {battle.id}, turn {turn.turn_number}, "
-                    f"slot {slot}, and model {llm_model.name}"
+                    f"slot {slot}, and model {llm_model.name}. Error: {str(exc.detail)}"
                 )
                 persisted_response.status = BattleResponse.ResponseStatus.FAILED
                 persisted_response.error_message = str(exc.detail)
@@ -517,7 +517,7 @@ class ArenaService(AbstractService):
                 persisted_response.save()
                 generation_errors.append(str(exc.detail))
             except Exception:
-                logger.exception(
+                logger.error(
                     f"Unexpected battle turn generation failure for battle {battle.id}, "
                     f"turn {turn.turn_number}, slot {slot}, and model {llm_model.name}"
                 )

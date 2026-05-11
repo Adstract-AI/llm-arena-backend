@@ -108,8 +108,8 @@ class ChatStreamingService(AbstractService):
                 },
             )
         except LLMInferenceException as exc:
-            logger.exception(
-                f"Streaming chat inference failed for session {session.id} and model {llm_model.name}"
+            logger.error(
+                f"Streaming chat inference failed for session {session.id} and model {llm_model.name}. Error: {exc.detail}"
             )
             error_message = str(exc.detail)
             self.chat_service.persist_failed_assistant_message(
@@ -124,7 +124,7 @@ class ChatStreamingService(AbstractService):
                 },
             )
         except Exception:
-            logger.exception(
+            logger.error(
                 f"Unexpected streaming chat inference failure for session {session.id} "
                 f"and model {llm_model.name}"
             )

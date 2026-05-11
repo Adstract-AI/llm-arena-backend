@@ -266,9 +266,9 @@ class ArenaStreamingService(AbstractService):
                 )
             )
         except LLMInferenceException as exc:
-            logger.exception(
+            logger.error(
                 f"Streaming generation failed for battle {battle_id}, turn {turn_id}, "
-                f"slot {slot_payload.slot}, and model {slot_payload.model_name}"
+                f"slot {slot_payload.slot}, and model {slot_payload.model_name}. Error: {exc.detail}"
             )
             self._persist_failed_response(
                 response_id=slot_payload.response_id,
@@ -285,7 +285,7 @@ class ArenaStreamingService(AbstractService):
                 )
             )
         except Exception:
-            logger.exception(
+            logger.error(
                 f"Unexpected streaming generation failure for battle {battle_id}, turn {turn_id}, "
                 f"slot {slot_payload.slot}, and model {slot_payload.model_name}"
             )
