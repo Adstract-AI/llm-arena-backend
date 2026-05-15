@@ -3,6 +3,9 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=10000
+ENV GUNICORN_WORKERS=3
+ENV GUNICORN_THREADS=2
+ENV GUNICORN_TIMEOUT=120
 
 WORKDIR /app
 
@@ -11,8 +14,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Future production command:
-#CMD ["sh", "-c", "python manage.py cold_start_setup --full-auto && gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers ${GUNICORN_WORKERS:-3}"]
-CMD ["sh", "-c", "python manage.py cold_start_setup --full-auto && python manage.py runserver 0.0.0.0:${PORT:-10000}"]
+RUN python manage.py collectstatic --noinput \
+    && addgroup --system app \
+    && adduser --system --ingroup app app \
+    && chown -R app:app /app
+
+USER app
+
+CMD ["sh", "-c", "python manage.py cold_start_setup --full-auto && exec gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers ${GUNICORN_WORKERS:-3} --threads ${GUNICORN_THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]
 
 EXPOSE 10000
